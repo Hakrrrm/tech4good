@@ -239,9 +239,9 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 .falling-object.collected { animation: collect 260ms ease-out forwards; }
 @keyframes collect { to { opacity: 0; scale: 1.8; } }
 
+.player-cursors { position: absolute; z-index: 5; inset: 0; pointer-events: none; }
 .player-cursor {
   position: absolute;
-  z-index: 5;
   width: 5.5rem;
   height: 5.5rem;
   transform: translate(-50%, -50%);
@@ -251,7 +251,32 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
   box-shadow: 0 0 0 9px rgba(222, 114, 95, 0.2), 0 7px 24px rgba(23,49,44,0.25);
   pointer-events: none;
 }
+.player-cursor.hand-two {
+  background: rgba(49, 125, 151, 0.84);
+  box-shadow: 0 0 0 9px rgba(49, 125, 151, 0.2), 0 7px 24px rgba(23,49,44,0.25);
+}
 .player-cursor span { position: absolute; inset: 38%; border-radius: 50%; background: white; }
+.tracking-status {
+  position: absolute;
+  z-index: 6;
+  top: 0.9rem;
+  left: 50%;
+  display: flex;
+  max-width: calc(100% - 2rem);
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.85rem;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255,255,255,0.9);
+  border-radius: 2rem;
+  color: white;
+  background: rgba(23, 63, 54, 0.86);
+  box-shadow: 0 6px 20px rgba(23,49,44,0.2);
+  text-align: center;
+}
+.tracking-status strong { font-size: 0.9rem; line-height: 1.25; }
+.tracking-dot { width: 0.72rem; height: 0.72rem; flex: 0 0 auto; border-radius: 50%; background: var(--gold); }
+.tracking-status.two-hands .tracking-dot { background: #77d29e; }
 .board-hint { position: absolute; z-index: 2; left: 1rem; bottom: 0.7rem; margin: 0; padding: 0.45rem 0.7rem; border-radius: 0.55rem; color: white; background: rgba(23, 63, 54, 0.78); font-weight: 700; }
 .input-hint { margin: 0.8rem 0 0; color: var(--muted); font-size: 1rem; text-align: center; }
 .pause-overlay { position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(23,63,54,0.72); backdrop-filter: blur(5px); }
@@ -308,6 +333,8 @@ footer p { margin: 0; }
   .stat strong { font-size: 1.15rem; }
   .game-board { min-height: 67vh; border-width: 3px; border-radius: 1.2rem; }
   .player-cursor { width: 4.7rem; height: 4.7rem; }
+  .tracking-status { top: 0.55rem; width: max-content; }
+  .tracking-status strong { font-size: 0.78rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

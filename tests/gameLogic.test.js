@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "../src/gameLogic.js";
+import { adaptiveSmoothing, getPalmCenter, updateHandSlots } from "../src/handTrackingMath.js";
 
 describe("game helpers", () => {
   it("formats the session countdown", () => {
@@ -23,5 +24,30 @@ describe("game helpers", () => {
     expect(getPaceConfig("unknown")).toEqual(getPaceConfig("gentle"));
     expect(randomObjectType(() => 0).kind).toBe("leaf");
     expect(randomObjectType(() => 0.99).kind).toBe("star");
+  });
+});
+
+describe("hand tracking helpers", () => {
+  it("uses the stable palm landmarks as the cursor anchor", () => {
+    const landmarks = Array.from({ length: 21 }, () => ({ x: 0, y: 0 }));
+    [0, 5, 9, 13, 17].forEach((index) => { landmarks[index] = { x: 0.4, y: 0.6 }; });
+    expect(getPalmCenter(landmarks)).toEqual({ x: 0.4, y: 0.6 });
+  });
+
+  it("responds faster to large movement and immediately reacquires a lost hand", () => {
+    const previous = { x: 0.2, y: 0.2 };
+    const quickMove = adaptiveSmoothing(previous, { x: 0.8, y: 0.2 }, 30);
+    expect(quickMove.x).toBeGreaterThan(0.7);
+    expect(adaptiveSmoothing(previous, { x: 0.8, y: 0.2 }, 250)).toEqual({ x: 0.8, y: 0.2 });
+  });
+
+  it("tracks two mirrored hands independently", () => {
+    const slots = updateHandSlots([], [
+      { x: 0.2, y: 0.4, label: "Left", confidence: 0.9 },
+      { x: 0.8, y: 0.5, label: "Right", confidence: 0.9 },
+    ], 1000);
+    expect(slots.filter((slot) => slot?.visible)).toHaveLength(2);
+    expect(slots[0].x).toBeCloseTo(0.8);
+    expect(slots[1].x).toBeCloseTo(0.2);
   });
 });

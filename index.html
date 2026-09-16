@@ -75,14 +75,20 @@
             <video id="cameraVideo" muted playsinline aria-label="Your mirrored camera view"></video>
             <div class="camera-wash" aria-hidden="true"></div>
             <div id="targets" class="targets" aria-hidden="true"></div>
-            <div id="playerCursor" class="player-cursor" aria-hidden="true"><span></span></div>
+            <div id="playerCursors" class="player-cursors" aria-hidden="true">
+              <div class="player-cursor hand-one" hidden><span></span></div>
+              <div class="player-cursor hand-two" hidden><span></span></div>
+            </div>
+            <div id="trackingStatus" class="tracking-status" hidden>
+              <span class="tracking-dot" aria-hidden="true"></span>
+              <strong>Looking for your hands</strong>
+            </div>
             <div id="pauseOverlay" class="pause-overlay" hidden>
               <div><span aria-hidden="true">Ⅱ</span><strong>Taking a pause</strong><small>Continue whenever you are ready.</small></div>
             </div>
             <p id="playInstructions" class="board-hint">Move to catch the shapes</p>
-            <canvas id="motionCanvas" width="192" height="108" hidden></canvas>
           </div>
-          <p id="inputHint" class="input-hint">Camera movement controls the circle.</p>
+          <p id="inputHint" class="input-hint">Your hands control the circles.</p>
         </section>
 
         <section id="resultsPanel" class="results-panel" aria-labelledby="resultsTitle" hidden>

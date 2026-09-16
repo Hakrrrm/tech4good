@@ -1,6 +1,6 @@
 import "./styles.css";
 import { circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "./gameLogic.js";
-import { MotionTracker } from "./motionTracker.js";
+import { HandTracker } from "./handTracker.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -12,9 +12,10 @@ const elements = {
   cameraMessage: $("#cameraMessage"),
   board: $("#gameBoard"),
   targets: $("#targets"),
-  cursor: $("#playerCursor"),
+  cursors: [...document.querySelectorAll(".player-cursor")],
+  trackingStatus: $("#trackingStatus"),
+  trackingStatusText: $("#trackingStatus strong"),
   video: $("#cameraVideo"),
-  canvas: $("#motionCanvas"),
   score: $("#scoreValue"),
   caught: $("#caughtValue"),
   missed: $("#missedValue"),
@@ -47,18 +48,38 @@ const state = {
   lastFrame: 0,
   lastSpawn: 0,
   objects: [],
-  player: { x: 0.5, y: 0.7, radius: 44 },
+  players: [],
   keys: new Set(),
   stream: null,
   animationId: null,
 };
 
-const tracker = new MotionTracker(elements.video, elements.canvas, (position) => {
+const tracker = new HandTracker(elements.video, (hands) => {
   if (state.running && !state.paused && state.mode === "camera") {
-    state.player.x = position.x;
-    state.player.y = position.y;
+    state.players = hands.map((hand) => hand ? { ...hand, radius: 44 } : null);
+    renderCursors();
+  }
+}, (status) => {
+  if (!state.running || state.mode !== "camera") return;
+  if (status.type === "tracking") updateTrackingStatus(status.count);
+  if (status.type === "error") {
+    elements.trackingStatusText.textContent = "Tracking is recovering…";
+    elements.statusLive.textContent = "Hand tracking is recovering.";
   }
 });
+
+function updateTrackingStatus(count) {
+  if (count >= 2) {
+    elements.trackingStatus.classList.add("two-hands");
+    elements.trackingStatusText.textContent = "Two hands ready";
+  } else if (count === 1) {
+    elements.trackingStatus.classList.remove("two-hands");
+    elements.trackingStatusText.textContent = "One hand ready — show your other hand to use both";
+  } else {
+    elements.trackingStatus.classList.remove("two-hands");
+    elements.trackingStatusText.textContent = "Show one or both hands to the camera";
+  }
+}
 
 function selectedValue(name) {
   return document.querySelector(`input[name="${name}"]:checked`).value;
@@ -71,15 +92,15 @@ async function requestCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
+      width: { ideal: 1280, max: 1280 },
+      height: { ideal: 720, max: 720 },
       facingMode: "user",
+      frameRate: { ideal: 30, max: 30 },
     },
   });
   elements.video.srcObject = stream;
   await elements.video.play();
   state.stream = stream;
-  tracker.start();
 }
 
 function stopCamera() {
@@ -91,10 +112,11 @@ function stopCamera() {
 
 async function startWithCamera() {
   elements.cameraStart.disabled = true;
-  elements.cameraStart.textContent = "Starting camera…";
-  elements.cameraMessage.textContent = "Your browser may ask for camera permission.";
+  elements.cameraStart.textContent = "Loading hand tracking…";
+  elements.cameraMessage.textContent = "Your browser may ask for camera permission. The hand model stays on this device.";
   try {
-    await requestCamera();
+    await Promise.all([requestCamera(), tracker.initialize()]);
+    tracker.start();
     startSession("camera");
   } catch (error) {
     stopCamera();
@@ -121,21 +143,23 @@ function startSession(mode) {
   state.lastFrame = state.startedAt;
   state.lastSpawn = state.startedAt - getPaceConfig(state.pace).spawnInterval * 0.55;
   state.objects = [];
-  state.player = { x: 0.5, y: 0.72, radius: 44 };
+  state.players = mode === "keyboard" ? [{ x: 0.5, y: 0.72, radius: 44 }] : [];
 
   elements.targets.replaceChildren();
   elements.setup.hidden = true;
   elements.results.hidden = true;
   elements.play.hidden = false;
   elements.video.hidden = mode !== "camera";
+  elements.trackingStatus.hidden = mode !== "camera";
+  updateTrackingStatus(0);
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
-    ? "Camera movement controls the circle. Keep your movement inside the camera view."
+    ? "Your palms control the circles. Use either hand or both hands together."
     : "Use the arrow keys or W A S D to move the circle.";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
   updateStats();
-  renderCursor();
+  renderCursors();
   elements.play.scrollIntoView({ block: "start" });
   elements.board.focus({ preventScroll: true });
   elements.statusLive.textContent = "Session started.";
@@ -171,13 +195,15 @@ function spawnObject(now) {
 
 function updateKeyboard(deltaSeconds) {
   if (state.mode !== "keyboard") return;
+  const player = state.players[0];
+  if (!player) return;
   const speed = 0.52 * deltaSeconds;
-  if (state.keys.has("arrowleft") || state.keys.has("a")) state.player.x -= speed;
-  if (state.keys.has("arrowright") || state.keys.has("d")) state.player.x += speed;
-  if (state.keys.has("arrowup") || state.keys.has("w")) state.player.y -= speed;
-  if (state.keys.has("arrowdown") || state.keys.has("s")) state.player.y += speed;
-  state.player.x = clamp(state.player.x, 0.04, 0.96);
-  state.player.y = clamp(state.player.y, 0.06, 0.94);
+  if (state.keys.has("arrowleft") || state.keys.has("a")) player.x -= speed;
+  if (state.keys.has("arrowright") || state.keys.has("d")) player.x += speed;
+  if (state.keys.has("arrowup") || state.keys.has("w")) player.y -= speed;
+  if (state.keys.has("arrowdown") || state.keys.has("s")) player.y += speed;
+  player.x = clamp(player.x, 0.04, 0.96);
+  player.y = clamp(player.y, 0.06, 0.94);
 }
 
 function gameLoop(now) {
@@ -200,7 +226,7 @@ function gameLoop(now) {
   spawnObject(now);
   updateObjects(deltaSeconds, now);
   updateStats();
-  renderCursor();
+  renderCursors();
   state.animationId = requestAnimationFrame(gameLoop);
 }
 
@@ -215,10 +241,11 @@ function updateObjects(deltaSeconds, now) {
     const displayX = clamp(object.x + sway, 0.05, 0.95);
     object.node.style.transform = `translate(${displayX * boardWidth}px, ${object.y * boardHeight}px)`;
 
-    if (circlesOverlap(
+    const caught = state.players.some((player) => player && circlesOverlap(
       { x: displayX * boardWidth, y: object.y * boardHeight, radius: object.radius },
-      { x: state.player.x * boardWidth, y: state.player.y * boardHeight, radius: state.player.radius },
-    )) {
+      { x: player.x * boardWidth, y: player.y * boardHeight, radius: player.radius },
+    ));
+    if (caught) {
       collectObject(object);
     } else if (object.y > 1.08) {
       missObject(object);
@@ -248,9 +275,14 @@ function missObject(object) {
   if (state.missed >= getPaceConfig(state.pace).missLimit) endSession("misses");
 }
 
-function renderCursor() {
-  elements.cursor.style.left = `${state.player.x * 100}%`;
-  elements.cursor.style.top = `${state.player.y * 100}%`;
+function renderCursors() {
+  elements.cursors.forEach((cursor, index) => {
+    const player = state.players[index];
+    cursor.hidden = !player;
+    if (!player) return;
+    cursor.style.left = `${player.x * 100}%`;
+    cursor.style.top = `${player.y * 100}%`;
+  });
 }
 
 function updateStats() {
@@ -267,12 +299,14 @@ function togglePause() {
   state.paused = !state.paused;
   if (state.paused) {
     state.pausedAt = performance.now();
+    if (state.mode === "camera") tracker.stop();
     elements.pause.textContent = "Continue";
     elements.pauseOverlay.hidden = false;
     elements.statusLive.textContent = "Session paused.";
   } else {
     state.pausedDuration += performance.now() - state.pausedAt;
     state.lastFrame = performance.now();
+    if (state.mode === "camera") tracker.start();
     elements.pause.textContent = "Pause";
     elements.pauseOverlay.hidden = true;
     elements.statusLive.textContent = "Session continued.";
@@ -288,6 +322,8 @@ function endSession(reason = "ended") {
   stopCamera();
   state.objects.forEach((object) => object.node.remove());
   state.objects = [];
+  state.players = [];
+  renderCursors();
 
   elements.play.hidden = true;
   elements.results.hidden = false;
@@ -330,4 +366,7 @@ elements.playAgain.addEventListener("click", resetToSetup);
 window.addEventListener("keydown", handleKeyDown);
 window.addEventListener("keyup", (event) => state.keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => state.keys.clear());
-window.addEventListener("beforeunload", stopCamera);
+window.addEventListener("beforeunload", () => {
+  stopCamera();
+  tracker.dispose();
+});

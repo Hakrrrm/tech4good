@@ -1,10 +1,12 @@
 # Gentle Catch
 
-Gentle Catch is a calm, camera-controlled movement game designed with older adults in mind. Leaves, flowers, hearts, and stars drift down the screen; players collect them by moving toward them. It uses its own name, visual language, rules, and artwork.
+Gentle Catch is a calm, camera-controlled movement game designed with older adults in mind. Leaves, flowers, hearts, and stars drift down the screen; players collect them with one or both hands. It uses its own name, visual language, rules, and artwork.
 
 ## Why it runs well on a Raspberry Pi
 
-The browser requests a 1080p camera stream for a clear display, but the local motion tracker downsamples each frame to 192 × 108 before calculating frame differences. No image, video, or telemetry leaves the device. There is no cloud API and no model download at runtime.
+The browser requests a 720p camera stream for a clear, responsive display. A worker downsamples frames to 640 × 360 and runs MediaPipe Hand Landmarker away from the game animation, tracking up to two palms at once. Busy inference frames are skipped instead of queued, which keeps the cursor current and the interface responsive. The hand model and WebAssembly runtime are included in the project, so there is no model download during play.
+
+No image or video leaves the device. Hand landmark inference happens locally in browser memory.
 
 ## Laptop quick start
 
@@ -23,6 +25,7 @@ Open `http://localhost:5173`, select a pace, and allow camera access. Camera acc
 - Sessions can be 1, 2, 3, or 5 minutes.
 - Pause or end a session at any time. Space or Escape also pauses when playing with the keyboard.
 - The game supports keyboard navigation, large controls, semantic labels, reduced motion, high contrast preferences, and responsive layouts.
+- One or both hands can be used simultaneously. Each palm gets its own cursor.
 - It can be played seated or standing. The player should stop if movement is uncomfortable.
 
 ## Raspberry Pi 5 kiosk deployment
@@ -45,7 +48,7 @@ The site is entirely static after `npm run build`; `vite preview` can be replace
 
 ## Privacy and limitations
 
-Processing happens in browser memory. Frames are discarded immediately and are never stored or uploaded. This lightweight tracker follows the center of visible movement rather than identifying a particular body part, so other moving people or changing lights may move the cursor. It is a recreational wellbeing game, not a medical device, fall detector, or rehabilitation assessment.
+Processing happens in browser memory. Frames are discarded immediately and are never stored or uploaded. The tracker estimates 21 landmarks on each visible hand and uses the palm center as the cursor. Occlusion, very low light, motion blur, or hands outside the camera view can briefly interrupt tracking. It is a recreational wellbeing game, not a medical device, fall detector, or rehabilitation assessment.
 
 ## Commands
 
