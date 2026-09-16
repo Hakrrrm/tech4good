@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#173f36" />
+    <meta name="description" content="A calm, camera-controlled movement game designed with older adults in mind." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23173f36'/%3E%3Cpath d='M47 13C29 15 17 26 18 40c10 3 22-1 28-11 3-5 3-11 1-16Z' fill='%23f3ca78'/%3E%3Cpath d='M17 49c8-15 17-22 29-29' fill='none' stroke='%23fff8e9' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <title>Gentle Catch</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#game">Skip to the game</a>
+    <div id="app">
+      <header class="site-header">
+        <a class="brand" href="#" aria-label="Gentle Catch home">
+          <span class="brand-mark" aria-hidden="true">❧</span>
+          <span>Gentle Catch</span>
+        </a>
+        <div class="privacy-note" aria-label="Privacy: camera processing stays on this device">
+          <span class="privacy-dot" aria-hidden="true"></span>
+          Camera stays on this device
+        </div>
+      </header>
+
+      <main id="game" class="game-shell">
+        <section id="setupPanel" class="setup-panel" aria-labelledby="welcomeTitle">
+          <div class="welcome-copy">
+            <p class="eyebrow">A gentle movement break</p>
+            <h1 id="welcomeTitle">Move, reach, and catch.</h1>
+            <p class="intro">Collect the garden shapes by moving your hand toward them. Play seated or standing, and move only as far as feels comfortable.</p>
+          </div>
+
+          <fieldset class="choice-group">
+            <legend>Choose a pace</legend>
+            <div class="segmented pace-options">
+              <label><input type="radio" name="pace" value="gentle" checked /><span><strong>Gentle</strong><small>More time to reach</small></span></label>
+              <label><input type="radio" name="pace" value="steady" /><span><strong>Steady</strong><small>A little quicker</small></span></label>
+              <label><input type="radio" name="pace" value="lively" /><span><strong>Lively</strong><small>More on screen</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="choice-group">
+            <legend>Session length</legend>
+            <div class="segmented duration-options">
+              <label><input type="radio" name="duration" value="1" checked /><span>1 min</span></label>
+              <label><input type="radio" name="duration" value="2" /><span>2 min</span></label>
+              <label><input type="radio" name="duration" value="3" /><span>3 min</span></label>
+              <label><input type="radio" name="duration" value="5" /><span>5 min</span></label>
+            </div>
+          </fieldset>
+
+          <div class="start-actions">
+            <button id="cameraStart" class="button button-primary" type="button">
+              <span aria-hidden="true">◉</span> Use camera &amp; start
+            </button>
+            <button id="keyboardStart" class="button button-secondary" type="button">Play with keyboard</button>
+          </div>
+          <p id="cameraMessage" class="camera-message" role="status"></p>
+          <p class="safety-note"><strong>Comfort first.</strong> Stop if movement feels uncomfortable. A caregiver can help with the first camera permission.</p>
+        </section>
+
+        <section id="playPanel" class="play-panel" aria-label="Gentle Catch play area" hidden>
+          <div class="game-toolbar">
+            <div class="stat"><span>Score</span><strong id="scoreValue">0</strong></div>
+            <div class="stat"><span>Caught</span><strong id="caughtValue">0</strong></div>
+            <div class="stat"><span>Missed</span><strong><span id="missedValue">0</span>/<span id="missLimit">8</span></strong></div>
+            <div class="stat time-stat"><span>Time left</span><strong id="timeValue">1:00</strong></div>
+            <div class="toolbar-actions">
+              <button id="pauseButton" class="button button-small" type="button">Pause</button>
+              <button id="endButton" class="button button-small button-quiet" type="button">End session</button>
+            </div>
+          </div>
+
+          <div id="gameBoard" class="game-board" tabindex="0" aria-describedby="playInstructions">
+            <video id="cameraVideo" muted playsinline aria-label="Your mirrored camera view"></video>
+            <div class="camera-wash" aria-hidden="true"></div>
+            <div id="targets" class="targets" aria-hidden="true"></div>
+            <div id="playerCursor" class="player-cursor" aria-hidden="true"><span></span></div>
+            <div id="pauseOverlay" class="pause-overlay" hidden>
+              <div><span aria-hidden="true">Ⅱ</span><strong>Taking a pause</strong><small>Continue whenever you are ready.</small></div>
+            </div>
+            <p id="playInstructions" class="board-hint">Move to catch the shapes</p>
+            <canvas id="motionCanvas" width="192" height="108" hidden></canvas>
+          </div>
+          <p id="inputHint" class="input-hint">Camera movement controls the circle.</p>
+        </section>
+
+        <section id="resultsPanel" class="results-panel" aria-labelledby="resultsTitle" hidden>
+          <div class="result-icon" aria-hidden="true">★</div>
+          <p class="eyebrow">Session complete</p>
+          <h2 id="resultsTitle">Lovely movement!</h2>
+          <p id="resultMessage" class="result-message">You caught 0 garden shapes.</p>
+          <div class="result-stats">
+            <div><span>Score</span><strong id="finalScore">0</strong></div>
+            <div><span>Caught</span><strong id="finalCaught">0</strong></div>
+          </div>
+          <button id="playAgain" class="button button-primary" type="button">Play another session</button>
+        </section>
+      </main>
+
+      <footer>
+        <p>Images are processed in browser memory and immediately discarded. Gentle Catch is a recreational wellbeing game, not a medical device.</p>
+      </footer>
+      <div id="statusLive" class="sr-only" aria-live="polite"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
