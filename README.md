@@ -4,7 +4,7 @@ Gentle Catch is a calm, camera-controlled movement game designed with older adul
 
 ## Why it runs well on a Raspberry Pi
 
-The browser requests a 720p camera stream for a clear, responsive display. A worker downsamples frames to 640 × 360 and runs MediaPipe Hand Landmarker away from the game animation, tracking up to two palms at once. Busy inference frames are skipped instead of queued, which keeps the cursor current and the interface responsive. The hand model and WebAssembly runtime are included in the project, so there is no model download during play.
+The browser requests a 720p camera stream for a clear display. A worker downsamples frames to 512 × 288 and runs MediaPipe Hand Landmarker away from the game animation, tracking up to two palms at once. Busy inference frames are skipped instead of queued. A lightweight velocity-aware filter limits sudden landmark spikes, while bounded prediction updates the cursor at the display refresh rate between camera results. The hand model and WebAssembly runtime are included in the project, so there is no model download during play.
 
 No image or video leaves the device. Hand landmark inference happens locally in browser memory.
 

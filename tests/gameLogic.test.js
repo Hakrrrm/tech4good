@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "../src/gameLogic.js";
-import { adaptiveSmoothing, getPalmCenter, updateHandSlots } from "../src/handTrackingMath.js";
+import {
+  adaptiveSmoothing,
+  filterHandPosition,
+  getPalmCenter,
+  presentHandSlots,
+  updateHandSlots,
+} from "../src/handTrackingMath.js";
 
 describe("game helpers", () => {
   it("formats the session countdown", () => {
@@ -49,5 +55,41 @@ describe("hand tracking helpers", () => {
     expect(slots.filter((slot) => slot?.visible)).toHaveLength(2);
     expect(slots[0].x).toBeCloseTo(0.8);
     expect(slots[1].x).toBeCloseTo(0.2);
+  });
+
+  it("dampens tiny landmark jitter without freezing deliberate movement", () => {
+    const previous = {
+      x: 0.5,
+      y: 0.5,
+      rawX: 0.5,
+      rawY: 0.5,
+      velocityX: 0,
+      velocityY: 0,
+      lastSeen: 1000,
+    };
+    const jitter = filterHandPosition(previous, { x: 0.51, y: 0.495 }, 1033);
+    const movement = filterHandPosition(previous, { x: 0.7, y: 0.5 }, 1033);
+    expect(jitter.x).toBeGreaterThan(0.5);
+    expect(jitter.x).toBeLessThan(0.51);
+    expect(movement.x - previous.x).toBeGreaterThan(jitter.x - previous.x);
+  });
+
+  it("resets immediately when a hand is reacquired", () => {
+    const previous = { x: 0.2, y: 0.2, rawX: 0.2, rawY: 0.2, lastSeen: 1000 };
+    expect(filterHandPosition(previous, { x: 0.8, y: 0.7 }, 1250)).toMatchObject({ x: 0.8, y: 0.7 });
+  });
+
+  it("presents smooth bounded motion between inference results", () => {
+    const slots = [{
+      x: 0.5,
+      y: 0.5,
+      velocityX: 4,
+      velocityY: 0,
+      lastSeen: 1000,
+      visible: true,
+    }, null];
+    const presented = presentHandSlots(slots, [{ x: 0.5, y: 0.5 }, null], 1030, 16);
+    expect(presented[0].x).toBeGreaterThan(0.5);
+    expect(presented[0].x).toBeLessThanOrEqual(0.575);
   });
 });

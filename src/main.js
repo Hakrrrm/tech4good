@@ -57,7 +57,6 @@ const state = {
 const tracker = new HandTracker(elements.video, (hands) => {
   if (state.running && !state.paused && state.mode === "camera") {
     state.players = hands.map((hand) => hand ? { ...hand, radius: 44 } : null);
-    renderCursors();
   }
 }, (status) => {
   if (!state.running || state.mode !== "camera") return;

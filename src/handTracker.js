@@ -1,4 +1,8 @@
-import { updateHandSlots } from "./handTrackingMath.js";
+import { presentHandSlots, updateHandSlots } from "./handTrackingMath.js";
+
+const TRACKING_WIDTH = 512;
+const TRACKING_HEIGHT = 288;
+const TARGET_FRAME_INTERVAL_MS = 1000 / 30;
 
 export class HandTracker {
   constructor(video, onHands, onStatus) {
@@ -12,9 +16,13 @@ export class HandTracker {
     this.running = false;
     this.inFlight = false;
     this.frameCallbackId = null;
-    this.animationId = null;
+    this.captureAnimationId = null;
+    this.presentationAnimationId = null;
+    this.lastPresentationTime = 0;
+    this.lastCaptureTime = -Infinity;
     this.lastVideoTime = -1;
     this.slots = [null, null];
+    this.presentedSlots = [null, null];
     this.generation = 0;
   }
 
@@ -56,7 +64,6 @@ export class HandTracker {
       this.inFlight = false;
       this.slots = updateHandSlots(this.slots, message.hands, performance.now());
       const visibleHands = this.slots.filter((slot) => slot?.visible);
-      this.onHands(this.slots.map((slot) => slot?.visible ? slot : null));
       this.onStatus({
         type: "tracking",
         count: visibleHands.length,
@@ -78,7 +85,11 @@ export class HandTracker {
     this.inFlight = false;
     this.lastVideoTime = -1;
     this.slots = [null, null];
+    this.presentedSlots = [null, null];
+    this.lastCaptureTime = -Infinity;
+    this.lastPresentationTime = performance.now();
     this.scheduleFrame();
+    this.presentationAnimationId = requestAnimationFrame((now) => this.presentHands(now));
   }
 
   stop() {
@@ -88,10 +99,13 @@ export class HandTracker {
     if (this.frameCallbackId !== null && this.video.cancelVideoFrameCallback) {
       this.video.cancelVideoFrameCallback(this.frameCallbackId);
     }
-    cancelAnimationFrame(this.animationId);
+    cancelAnimationFrame(this.captureAnimationId);
+    cancelAnimationFrame(this.presentationAnimationId);
     this.frameCallbackId = null;
-    this.animationId = null;
+    this.captureAnimationId = null;
+    this.presentationAnimationId = null;
     this.slots = [null, null];
+    this.presentedSlots = [null, null];
     this.onHands([]);
   }
 
@@ -100,20 +114,36 @@ export class HandTracker {
     if (this.video.requestVideoFrameCallback) {
       this.frameCallbackId = this.video.requestVideoFrameCallback((now) => this.captureFrame(now));
     } else {
-      this.animationId = requestAnimationFrame((now) => this.captureFrame(now));
+      this.captureAnimationId = requestAnimationFrame((now) => this.captureFrame(now));
     }
+  }
+
+  presentHands(timestampMs) {
+    if (!this.running) return;
+    const elapsedMs = timestampMs - this.lastPresentationTime;
+    this.lastPresentationTime = timestampMs;
+    this.presentedSlots = presentHandSlots(this.slots, this.presentedSlots, timestampMs, elapsedMs);
+    this.onHands(this.presentedSlots);
+    this.presentationAnimationId = requestAnimationFrame((now) => this.presentHands(now));
   }
 
   async captureFrame(timestampMs) {
     this.scheduleFrame();
-    if (!this.running || this.inFlight || this.video.readyState < 2 || this.video.currentTime === this.lastVideoTime) return;
+    if (
+      !this.running
+      || this.inFlight
+      || this.video.readyState < 2
+      || this.video.currentTime === this.lastVideoTime
+      || timestampMs - this.lastCaptureTime < TARGET_FRAME_INTERVAL_MS - 2
+    ) return;
 
     this.inFlight = true;
     this.lastVideoTime = this.video.currentTime;
+    this.lastCaptureTime = timestampMs;
     try {
       const bitmap = await createImageBitmap(this.video, {
-        resizeWidth: 640,
-        resizeHeight: 360,
+        resizeWidth: TRACKING_WIDTH,
+        resizeHeight: TRACKING_HEIGHT,
         resizeQuality: "low",
       });
       if (!this.running) {
