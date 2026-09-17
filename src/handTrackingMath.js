@@ -3,7 +3,8 @@ import { clamp } from "./gameLogic.js";
 const PALM_LANDMARKS = [0, 5, 9, 13, 17];
 const MAX_HANDS = 2;
 const REACQUIRE_MS = 140;
-const VISIBLE_GRACE_MS = 140;
+const TRACKING_GRACE_MS = 140;
+const CURSOR_HOLD_MS = 360;
 const MIN_CUTOFF = 2.5;
 const SPEED_COEFFICIENT = 1.4;
 const DERIVATIVE_CUTOFF = 3;
@@ -145,7 +146,7 @@ export function updateHandSlots(previousSlots, detections, timestamp) {
     if (!slot) return null;
     return {
       ...slot,
-      visible: slot.visible || timestamp - slot.lastSeen < VISIBLE_GRACE_MS,
+      visible: slot.visible || timestamp - slot.lastSeen < TRACKING_GRACE_MS,
     };
   });
 }
@@ -155,7 +156,7 @@ export function presentHandSlots(slots, previousPresented, timestamp, elapsedMs)
 
   return Array.from({ length: MAX_HANDS }, (_, index) => {
     const slot = slots[index];
-    if (!slot || !slot.visible || timestamp - slot.lastSeen > VISIBLE_GRACE_MS) return null;
+    if (!slot || timestamp - slot.lastSeen > CURSOR_HOLD_MS) return null;
 
     const predictionSeconds = clamp(timestamp - slot.lastSeen + 12, 0, MAX_PREDICTION_MS) / 1000;
     let predictionX = (slot.velocityX ?? 0) * predictionSeconds;
@@ -179,6 +180,11 @@ export function presentHandSlots(slots, previousPresented, timestamp, elapsedMs)
         }
       : target;
 
-    return { ...slot, ...position, visible: true };
+    return {
+      ...slot,
+      ...position,
+      visible: true,
+      interactive: timestamp - slot.lastSeen <= TRACKING_GRACE_MS,
+    };
   });
 }

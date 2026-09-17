@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "../src/gameLogic.js";
+import {
+  applyObjectScore,
+  circlesOverlap,
+  clamp,
+  formatTime,
+  getPaceConfig,
+  getStreakMultiplier,
+  randomObjectType,
+} from "../src/gameLogic.js";
 import {
   adaptiveSmoothing,
   filterHandPosition,
@@ -29,7 +37,27 @@ describe("game helpers", () => {
   it("provides safe defaults and deterministic object selection", () => {
     expect(getPaceConfig("unknown")).toEqual(getPaceConfig("gentle"));
     expect(randomObjectType(() => 0).kind).toBe("leaf");
-    expect(randomObjectType(() => 0.99).kind).toBe("star");
+    expect(randomObjectType(() => 0.8).kind).toBe("star");
+    expect(randomObjectType(() => 0.85).kind).toBe("bomb");
+    expect(randomObjectType(() => 0.99).kind).toBe("virus");
+  });
+
+  it("builds a capped streak multiplier and resets it on hazards", () => {
+    expect(getStreakMultiplier(0)).toBe(1);
+    expect(getStreakMultiplier(3)).toBe(2);
+    expect(getStreakMultiplier(9)).toBe(4);
+    expect(getStreakMultiplier(99)).toBe(4);
+
+    const thirdCatch = applyObjectScore({ score: 25, streak: 2 }, { points: 10, hazard: false });
+    expect(thirdCatch).toEqual({ score: 45, streak: 3, multiplier: 2, delta: 20 });
+
+    const hazard = applyObjectScore(thirdCatch, { points: -25, hazard: true });
+    expect(hazard).toEqual({ score: 20, streak: 0, multiplier: 1, delta: -25 });
+  });
+
+  it("never lets a hazard reduce the score below zero", () => {
+    expect(applyObjectScore({ score: 10, streak: 4 }, { points: -25, hazard: true }))
+      .toEqual({ score: 0, streak: 0, multiplier: 1, delta: -10 });
   });
 });
 
@@ -91,5 +119,13 @@ describe("hand tracking helpers", () => {
     const presented = presentHandSlots(slots, [{ x: 0.5, y: 0.5 }, null], 1030, 16);
     expect(presented[0].x).toBeGreaterThan(0.5);
     expect(presented[0].x).toBeLessThanOrEqual(0.575);
+  });
+
+  it("holds a cursor through a brief detection dropout to prevent flicker", () => {
+    const slots = [{ x: 0.5, y: 0.5, lastSeen: 1000, visible: false }, null];
+    const heldCursor = presentHandSlots(slots, [{ x: 0.5, y: 0.5 }, null], 1280, 16)[0];
+    expect(heldCursor).not.toBeNull();
+    expect(heldCursor.interactive).toBe(false);
+    expect(presentHandSlots(slots, [{ x: 0.5, y: 0.5 }, null], 1400, 16)[0]).toBeNull();
   });
 });

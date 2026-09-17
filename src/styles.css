@@ -174,7 +174,7 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 .play-panel { padding-bottom: 1rem; }
 .game-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(5rem, auto)) 1fr;
+  grid-template-columns: repeat(5, minmax(4.5rem, auto)) 1fr;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
@@ -187,6 +187,8 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 .stat span { display: block; color: #c7dfd5; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .stat strong { display: block; font-size: 1.55rem; line-height: 1.1; }
 .stat strong span { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; }
+.stat strong small { color: #c7dfd5; font-size: 0.78rem; }
+.stat strong small.active { color: var(--gold); }
 .toolbar-actions { justify-self: end; display: flex; gap: 0.45rem; }
 .button-small { min-height: 2.85rem; padding: 0.55rem 1rem; color: var(--forest); background: var(--gold); }
 .button-quiet { color: white; background: transparent; border-color: rgba(255,255,255,0.5); }
@@ -236,8 +238,37 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 .falling-object.flower { color: #d96774; }
 .falling-object.heart { color: #de6257; }
 .falling-object.star { color: #e3a823; }
+.falling-object.bomb {
+  color: white;
+  background: #4a3938;
+  border-color: #ffb45f;
+  box-shadow: 0 0 0 6px rgba(214, 72, 54, 0.2), 0 8px 18px rgba(23,49,44,0.28);
+}
+.falling-object.virus {
+  color: white;
+  background: #66508a;
+  border-color: #d5c0ff;
+  box-shadow: 0 0 0 6px rgba(102, 80, 138, 0.2), 0 8px 18px rgba(23,49,44,0.28);
+}
 .falling-object.collected { animation: collect 260ms ease-out forwards; }
+.falling-object.hazard-hit { animation: hazard-hit 260ms ease-out forwards; }
 @keyframes collect { to { opacity: 0; scale: 1.8; } }
+@keyframes hazard-hit {
+  35% { rotate: -12deg; scale: 1.12; }
+  70% { rotate: 12deg; }
+  to { opacity: 0; scale: 0.7; }
+}
+.game-board.hazard-flash::after {
+  content: "";
+  position: absolute;
+  z-index: 9;
+  inset: 0;
+  border: 10px solid rgba(190, 54, 43, 0.72);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: hazard-flash 300ms ease-out forwards;
+}
+@keyframes hazard-flash { to { border-color: transparent; } }
 
 .player-cursors { position: absolute; z-index: 5; inset: 0; pointer-events: none; }
 .player-cursor {
@@ -296,7 +327,7 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 }
 .result-icon { display: grid; width: 6rem; height: 6rem; margin: 0 auto 1.4rem; place-items: center; border-radius: 50%; color: var(--forest); background: var(--gold); font-size: 3rem; }
 .result-message { color: var(--muted); font-size: 1.2rem; }
-.result-stats { display: grid; grid-template-columns: repeat(2, 1fr); max-width: 24rem; margin: 1.8rem auto; border-block: 1px solid var(--line); }
+.result-stats { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 32rem; margin: 1.8rem auto; border-block: 1px solid var(--line); }
 .result-stats div { padding: 1.2rem; }
 .result-stats div + div { border-left: 1px solid var(--line); }
 .result-stats span, .result-stats strong { display: block; }
@@ -313,7 +344,7 @@ footer p { margin: 0; }
   h1 { max-width: 12ch; font-size: clamp(3rem, 13vw, 5rem); }
   .start-actions, .camera-message { grid-column: 1; }
   .safety-note { grid-column: 1; }
-  .game-toolbar { grid-template-columns: repeat(4, 1fr); }
+  .game-toolbar { grid-template-columns: repeat(3, 1fr); }
   .toolbar-actions { grid-column: 1 / -1; justify-self: stretch; }
   .toolbar-actions .button { flex: 1; }
   .stat { padding-inline: 0.4rem; }
@@ -329,6 +360,7 @@ footer p { margin: 0; }
   .start-actions { grid-template-columns: 1fr; }
   .game-shell { width: min(100% - 1rem, 1160px); }
   .game-toolbar { gap: 0.3rem; border-radius: 1rem; }
+  .stat { border-right: 0; }
   .stat span { font-size: 0.63rem; }
   .stat strong { font-size: 1.15rem; }
   .game-board { min-height: 67vh; border-width: 3px; border-radius: 1.2rem; }

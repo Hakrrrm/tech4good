@@ -1,5 +1,5 @@
 import "./styles.css";
-import { circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "./gameLogic.js";
+import { applyObjectScore, circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "./gameLogic.js";
 import { HandTracker } from "./handTracker.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -17,6 +17,8 @@ const elements = {
   trackingStatusText: $("#trackingStatus strong"),
   video: $("#cameraVideo"),
   score: $("#scoreValue"),
+  streak: $("#streakValue"),
+  multiplier: $("#multiplierValue"),
   caught: $("#caughtValue"),
   missed: $("#missedValue"),
   missLimit: $("#missLimit"),
@@ -27,6 +29,7 @@ const elements = {
   inputHint: $("#inputHint"),
   finalScore: $("#finalScore"),
   finalCaught: $("#finalCaught"),
+  finalStreak: $("#finalStreak"),
   resultMessage: $("#resultMessage"),
   playAgain: $("#playAgain"),
   statusLive: $("#statusLive"),
@@ -37,6 +40,9 @@ const state = {
   paused: false,
   mode: "keyboard",
   score: 0,
+  streak: 0,
+  multiplier: 1,
+  bestStreak: 0,
   caught: 0,
   missed: 0,
   pace: "gentle",
@@ -132,6 +138,9 @@ function startSession(mode) {
   state.paused = false;
   state.mode = mode;
   state.score = 0;
+  state.streak = 0;
+  state.multiplier = 1;
+  state.bestStreak = 0;
   state.caught = 0;
   state.missed = 0;
   state.pace = selectedValue("pace");
@@ -153,8 +162,8 @@ function startSession(mode) {
   updateTrackingStatus(0);
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
-    ? "Your palms control the circles. Use either hand or both hands together."
-    : "Use the arrow keys or W A S D to move the circle.";
+    ? "Your palms control the circles. Catch garden shapes and avoid bombs and germs."
+    : "Use the arrow keys or W A S D. Catch garden shapes and avoid bombs and germs.";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
   updateStats();
@@ -240,14 +249,15 @@ function updateObjects(deltaSeconds, now) {
     const displayX = clamp(object.x + sway, 0.05, 0.95);
     object.node.style.transform = `translate(${displayX * boardWidth}px, ${object.y * boardHeight}px)`;
 
-    const caught = state.players.some((player) => player && circlesOverlap(
+    const caught = state.players.some((player) => player && player.interactive !== false && circlesOverlap(
       { x: displayX * boardWidth, y: object.y * boardHeight, radius: object.radius },
       { x: player.x * boardWidth, y: player.y * boardHeight, radius: player.radius },
     ));
     if (caught) {
-      collectObject(object);
+      resolveObject(object);
     } else if (object.y > 1.08) {
-      missObject(object);
+      if (object.type.hazard) removeObject(object);
+      else missObject(object);
     }
   }
 }
@@ -257,13 +267,32 @@ function removeObject(object) {
   state.objects = state.objects.filter((candidate) => candidate.id !== object.id);
 }
 
-function collectObject(object) {
-  state.score += object.type.points;
-  state.caught += 1;
-  object.node.classList.add("collected");
+function resolveObject(object) {
+  const result = applyObjectScore(state, object.type);
+  state.score = result.score;
+  state.streak = result.streak;
+  state.multiplier = result.multiplier;
+  state.bestStreak = Math.max(state.bestStreak, state.streak);
+  object.node.classList.add(object.type.hazard ? "hazard-hit" : "collected");
   setTimeout(() => object.node.remove(), 260);
   state.objects = state.objects.filter((candidate) => candidate.id !== object.id);
-  if (state.caught === 1 || state.caught % 5 === 0) {
+
+  if (object.type.hazard) {
+    elements.board.classList.remove("hazard-flash");
+    void elements.board.offsetWidth;
+    elements.board.classList.add("hazard-flash");
+    setTimeout(() => elements.board.classList.remove("hazard-flash"), 300);
+    const pointsLost = Math.abs(result.delta);
+    elements.statusLive.textContent = pointsLost
+      ? `${object.type.label} hit. ${pointsLost} points lost. Streak reset.`
+      : `${object.type.label} hit. Streak reset.`;
+    return;
+  }
+
+  state.caught += 1;
+  if (state.multiplier > 1) {
+    elements.statusLive.textContent = `${object.type.label} caught for ${result.delta} points. ${state.multiplier} times streak multiplier.`;
+  } else if (state.caught === 1 || state.caught % 5 === 0) {
     elements.statusLive.textContent = `${state.caught} shapes caught.`;
   }
 }
@@ -287,6 +316,9 @@ function renderCursors() {
 function updateStats() {
   const config = getPaceConfig(state.pace);
   elements.score.textContent = state.score;
+  elements.streak.textContent = state.streak;
+  elements.multiplier.textContent = `×${state.multiplier}`;
+  elements.multiplier.classList.toggle("active", state.multiplier > 1);
   elements.caught.textContent = state.caught;
   elements.missed.textContent = state.missed;
   elements.missLimit.textContent = config.missLimit;
@@ -328,6 +360,7 @@ function endSession(reason = "ended") {
   elements.results.hidden = false;
   elements.finalScore.textContent = state.score;
   elements.finalCaught.textContent = state.caught;
+  elements.finalStreak.textContent = state.bestStreak;
   elements.resultMessage.textContent = reason === "misses"
     ? `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}. Time for a gentle rest.`
     : `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}.`;
