@@ -1,8 +1,14 @@
-import { presentHandSlots, updateHandSlots } from "./handTrackingMath.js";
+import {
+  MAX_HANDS,
+  presentFaceSlots,
+  presentHandSlots,
+  updateFaceSlots,
+  updateHandSlots,
+} from "./handTrackingMath.js";
 
-const TRACKING_WIDTH = 512;
-const TRACKING_HEIGHT = 288;
-const TARGET_FRAME_INTERVAL_MS = 1000 / 30;
+const TRACKING_WIDTH = 384;
+const TRACKING_HEIGHT = 216;
+const TARGET_FRAME_INTERVAL_MS = 1000 / 24;
 
 export class HandTracker {
   constructor(video, onHands, onStatus) {
@@ -21,8 +27,11 @@ export class HandTracker {
     this.lastPresentationTime = 0;
     this.lastCaptureTime = -Infinity;
     this.lastVideoTime = -1;
-    this.slots = [null, null];
-    this.presentedSlots = [null, null];
+    this.slots = Array(MAX_HANDS).fill(null);
+    this.presentedSlots = Array(MAX_HANDS).fill(null);
+    this.faceSlots = [null, null];
+    this.faceTrackingEnabled = false;
+    this.faceTrackingReady = false;
     this.generation = 0;
   }
 
@@ -45,6 +54,8 @@ export class HandTracker {
       type: "INIT",
       wasmBaseUrl: new URL("wasm", baseUrl).href,
       modelUrl: new URL("models/hand_landmarker.task", baseUrl).href,
+      faceModelUrl: new URL("models/blaze_face_short_range.tflite", baseUrl).href,
+      faceTrackingEnabled: this.faceTrackingEnabled,
     });
     return this.initialization;
   }
@@ -59,15 +70,29 @@ export class HandTracker {
       this.rejectInitialization?.(new Error(message.error));
       return;
     }
+    if (message.type === "FACE_READY") {
+      this.faceTrackingReady = true;
+      this.onStatus({ type: "face-ready" });
+      return;
+    }
+    if (message.type === "FACE_INIT_ERROR") {
+      this.faceTrackingReady = false;
+      this.onStatus({ type: "face-error", message: message.error });
+      return;
+    }
     if (message.type === "RESULT") {
       if (message.generation !== this.generation) return;
       this.inFlight = false;
-      this.slots = updateHandSlots(this.slots, message.hands, performance.now());
+      const now = performance.now();
+      this.slots = updateHandSlots(this.slots, message.hands, now);
+      if (message.faces) this.faceSlots = updateFaceSlots(this.faceSlots, message.faces, now);
       const visibleHands = this.slots.filter((slot) => slot?.visible);
       this.onStatus({
         type: "tracking",
         count: visibleHands.length,
         inferenceMs: message.inferenceMs,
+        faceInferenceMs: message.faceInferenceMs,
+        faceCount: this.faceSlots.filter((slot) => slot?.visible).length,
         backend: message.backend,
       });
       return;
@@ -84,12 +109,37 @@ export class HandTracker {
     this.running = true;
     this.inFlight = false;
     this.lastVideoTime = -1;
-    this.slots = [null, null];
-    this.presentedSlots = [null, null];
+    this.slots = Array(MAX_HANDS).fill(null);
+    this.presentedSlots = Array(MAX_HANDS).fill(null);
+    this.faceSlots = [null, null];
     this.lastCaptureTime = -Infinity;
     this.lastPresentationTime = performance.now();
     this.scheduleFrame();
     this.presentationAnimationId = requestAnimationFrame((now) => this.presentHands(now));
+  }
+
+  setFaceTrackingEnabled(enabled) {
+    this.faceTrackingEnabled = Boolean(enabled);
+    if (!this.faceTrackingEnabled) this.faceSlots = [null, null];
+    this.worker?.postMessage({ type: "SET_FACE_TRACKING", enabled: this.faceTrackingEnabled });
+  }
+
+  setVideo(video) {
+    if (this.video === video) return;
+    const wasRunning = this.running;
+    if (wasRunning) {
+      if (this.frameCallbackId !== null && this.video.cancelVideoFrameCallback) {
+        this.video.cancelVideoFrameCallback(this.frameCallbackId);
+      }
+      cancelAnimationFrame(this.captureAnimationId);
+      this.frameCallbackId = null;
+      this.captureAnimationId = null;
+    }
+    this.video = video;
+    this.lastVideoTime = -1;
+    this.lastCaptureTime = -Infinity;
+    this.inFlight = false;
+    if (wasRunning) this.scheduleFrame();
   }
 
   stop() {
@@ -104,9 +154,10 @@ export class HandTracker {
     this.frameCallbackId = null;
     this.captureAnimationId = null;
     this.presentationAnimationId = null;
-    this.slots = [null, null];
-    this.presentedSlots = [null, null];
-    this.onHands([]);
+    this.slots = Array(MAX_HANDS).fill(null);
+    this.presentedSlots = Array(MAX_HANDS).fill(null);
+    this.faceSlots = [null, null];
+    this.onHands([], []);
   }
 
   scheduleFrame() {
@@ -123,7 +174,8 @@ export class HandTracker {
     const elapsedMs = timestampMs - this.lastPresentationTime;
     this.lastPresentationTime = timestampMs;
     this.presentedSlots = presentHandSlots(this.slots, this.presentedSlots, timestampMs, elapsedMs);
-    this.onHands(this.presentedSlots);
+    const presentedFaces = this.faceTrackingEnabled ? presentFaceSlots(this.faceSlots, timestampMs) : [];
+    this.onHands(this.presentedSlots, presentedFaces);
     this.presentationAnimationId = requestAnimationFrame((now) => this.presentHands(now));
   }
 

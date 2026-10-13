@@ -1,7 +1,7 @@
 import { clamp } from "./gameLogic.js";
 
 const PALM_LANDMARKS = [0, 5, 9, 13, 17];
-const MAX_HANDS = 2;
+export const MAX_HANDS = 4;
 const REACQUIRE_MS = 140;
 const TRACKING_GRACE_MS = 140;
 const CURSOR_HOLD_MS = 360;
@@ -10,6 +10,9 @@ const SPEED_COEFFICIENT = 1.4;
 const DERIVATIVE_CUTOFF = 3;
 const MAX_PREDICTION_MS = 45;
 const MAX_PREDICTION_DISTANCE = 0.075;
+const MAX_FACES = 2;
+const FACE_TRACKING_GRACE_MS = 550;
+const FACE_HOLD_MS = 1100;
 
 export function getPalmCenter(landmarks) {
   const points = PALM_LANDMARKS.map((index) => landmarks[index]).filter(Boolean);
@@ -104,12 +107,16 @@ export function updateHandSlots(previousSlots, detections, timestamp) {
       y: clamp(detection.y, 0.04, 0.96),
     };
 
-    let slotIndex = slots.findIndex((slot, index) =>
-      !usedSlots.has(index)
-      && slot?.label === detection.label
-      && timestamp - slot.lastSeen < 1000
-      && distance({ x: slot.rawX ?? slot.x, y: slot.rawY ?? slot.y }, mirrored) < 0.65,
-    );
+    let slotIndex = -1;
+    let matchingDistance = Infinity;
+    slots.forEach((slot, index) => {
+      if (!slot || usedSlots.has(index) || slot.label !== detection.label || timestamp - slot.lastSeen >= 500) return;
+      const candidateDistance = distance({ x: slot.rawX ?? slot.x, y: slot.rawY ?? slot.y }, mirrored);
+      if (candidateDistance < matchingDistance && candidateDistance < 0.45) {
+        matchingDistance = candidateDistance;
+        slotIndex = index;
+      }
+    });
 
     if (slotIndex < 0) {
       let nearestDistance = Infinity;
@@ -185,6 +192,109 @@ export function presentHandSlots(slots, previousPresented, timestamp, elapsedMs)
       ...position,
       visible: true,
       interactive: timestamp - slot.lastSeen <= TRACKING_GRACE_MS,
+    };
+  });
+}
+
+function predictedFacePosition(face, timestamp) {
+  const elapsedSeconds = clamp((timestamp - face.lastSeen) / 1000, 0, 0.3);
+  return {
+    x: clamp(face.x + (face.velocityX ?? 0) * elapsedSeconds, 0.02, 0.98),
+    y: clamp(face.y + (face.velocityY ?? 0) * elapsedSeconds, 0.02, 0.98),
+  };
+}
+
+function updateFaceSlot(previous, detection, timestamp) {
+  if (!previous || timestamp - previous.lastSeen > FACE_HOLD_MS) {
+    return {
+      ...detection,
+      velocityX: 0,
+      velocityY: 0,
+      lastSeen: timestamp,
+      visible: true,
+    };
+  }
+
+  const elapsedSeconds = clamp((timestamp - previous.lastSeen) / 1000, 1 / 30, 0.35);
+  const velocityX = (detection.x - previous.x) / elapsedSeconds;
+  const velocityY = (detection.y - previous.y) / elapsedSeconds;
+  return {
+    ...detection,
+    x: lowPass(previous.x, detection.x, 0.46),
+    y: lowPass(previous.y, detection.y, 0.46),
+    width: lowPass(previous.width, detection.width, 0.4),
+    height: lowPass(previous.height, detection.height, 0.4),
+    velocityX: lowPass(previous.velocityX ?? 0, velocityX, 0.35),
+    velocityY: lowPass(previous.velocityY ?? 0, velocityY, 0.35),
+    lastSeen: timestamp,
+    visible: true,
+  };
+}
+
+export function updateFaceSlots(previousSlots = [], detections = [], timestamp) {
+  const slots = Array.from({ length: MAX_FACES }, (_, index) => {
+    const previous = previousSlots[index];
+    return previous ? { ...previous, visible: false } : null;
+  });
+  const normalized = detections.slice(0, MAX_FACES).map((face) => ({
+    ...face,
+    x: clamp(1 - face.x, 0.02, 0.98),
+    y: clamp(face.y, 0.02, 0.98),
+    width: clamp(face.width, 0.04, 0.9),
+    height: clamp(face.height, 0.04, 0.9),
+  }));
+  const activeSlots = slots
+    .map((slot, index) => ({ slot, index }))
+    .filter(({ slot }) => slot && timestamp - slot.lastSeen <= FACE_HOLD_MS);
+
+  if (!activeSlots.length) {
+    normalized.sort((first, second) => first.x - second.x).forEach((face, index) => {
+      slots[index] = updateFaceSlot(null, face, timestamp);
+    });
+  } else if (normalized.length === 2 && activeSlots.length === 2) {
+    const predicted = activeSlots.map(({ slot }) => predictedFacePosition(slot, timestamp));
+    const directCost = distance(predicted[0], normalized[0]) + distance(predicted[1], normalized[1]);
+    const swappedCost = distance(predicted[0], normalized[1]) + distance(predicted[1], normalized[0]);
+    const ordered = directCost <= swappedCost ? normalized : [normalized[1], normalized[0]];
+    activeSlots.forEach(({ slot, index }, orderIndex) => {
+      slots[index] = updateFaceSlot(slot, ordered[orderIndex], timestamp);
+    });
+  } else {
+    const availableSlots = new Set([0, 1]);
+    normalized.forEach((face) => {
+      let bestIndex = -1;
+      let bestDistance = Infinity;
+      slots.forEach((slot, index) => {
+        if (!slot || !availableSlots.has(index) || timestamp - slot.lastSeen > FACE_HOLD_MS) return;
+        const candidateDistance = distance(predictedFacePosition(slot, timestamp), face);
+        if (candidateDistance < bestDistance) {
+          bestDistance = candidateDistance;
+          bestIndex = index;
+        }
+      });
+      if (bestIndex < 0) bestIndex = [...availableSlots][0];
+      slots[bestIndex] = updateFaceSlot(slots[bestIndex], face, timestamp);
+      availableSlots.delete(bestIndex);
+    });
+  }
+
+  return slots.map((slot) => {
+    if (!slot) return null;
+    return {
+      ...slot,
+      visible: slot.visible || timestamp - slot.lastSeen < FACE_TRACKING_GRACE_MS,
+    };
+  });
+}
+
+export function presentFaceSlots(slots = [], timestamp) {
+  return Array.from({ length: MAX_FACES }, (_, index) => {
+    const slot = slots[index];
+    if (!slot || timestamp - slot.lastSeen > FACE_HOLD_MS) return null;
+    return {
+      ...slot,
+      visible: true,
+      interactive: timestamp - slot.lastSeen <= FACE_TRACKING_GRACE_MS,
     };
   });
 }

@@ -3,19 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#173f36" />
-    <meta name="description" content="A calm, camera-controlled movement game designed with older adults in mind." />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23173f36'/%3E%3Cpath d='M47 13C29 15 17 26 18 40c10 3 22-1 28-11 3-5 3-11 1-16Z' fill='%23f3ca78'/%3E%3Cpath d='M17 49c8-15 17-22 29-29' fill='none' stroke='%23fff8e9' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
-    <title>Gentle Catch</title>
+    <meta name="theme-color" content="#0b8f92" />
+    <meta name="description" content="Gentle Catch is an accessible camera-controlled movement game created with Precious Active Ageing Centre." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%230b8f92'/%3E%3Cpath d='M18 35c7-15 22-18 30-12-1 14-12 25-28 22' fill='%23fff'/%3E%3Cpath d='M21 44c8-10 14-15 25-19' fill='none' stroke='%23f04e78' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <title>Gentle Catch · Precious Active Ageing Centre</title>
   </head>
   <body>
     <a class="skip-link" href="#game">Skip to the game</a>
     <div id="app">
       <header class="site-header">
-        <a class="brand" href="#" aria-label="Gentle Catch home">
-          <span class="brand-mark" aria-hidden="true">❧</span>
-          <span>Gentle Catch</span>
-        </a>
+        <div class="partner-lockup" aria-label="A project for Precious Active Ageing Centre with NTU Singapore">
+          <img class="partner-logo precious-logo" src="/brand/precious-aac-transparent.png" alt="Precious Active Ageing Centre" />
+          <span class="partner-divider" aria-hidden="true"></span>
+          <img class="partner-logo ntu-logo" src="/brand/ntu.png" alt="Nanyang Technological University Singapore" />
+        </div>
         <div class="privacy-note" aria-label="Privacy: camera processing stays on this device">
           <span class="privacy-dot" aria-hidden="true"></span>
           Camera stays on this device
@@ -23,48 +24,155 @@
       </header>
 
       <main id="game" class="game-shell">
-        <section id="setupPanel" class="setup-panel" aria-labelledby="welcomeTitle">
-          <div class="welcome-copy">
-            <p class="eyebrow">A gentle movement break</p>
-            <h1 id="welcomeTitle">Move, reach, and catch.</h1>
-            <p class="intro">Collect the garden shapes, build a scoring streak, and steer clear of bombs and germs. Play seated or standing, and move only as far as feels comfortable.</p>
+        <section id="landingPanel" class="landing-panel screen-panel" aria-labelledby="landingTitle">
+          <div class="landing-art" aria-hidden="true">
+            <span class="float-shape shape-one">✿</span>
+            <span class="float-shape shape-two">♥</span>
+            <span class="float-shape shape-three">★</span>
+            <span class="float-shape shape-four">●</span>
           </div>
-
-          <fieldset class="choice-group">
-            <legend>Choose a pace</legend>
-            <div class="segmented pace-options">
-              <label><input type="radio" name="pace" value="gentle" checked /><span><strong>Gentle</strong><small>More time to reach</small></span></label>
-              <label><input type="radio" name="pace" value="steady" /><span><strong>Steady</strong><small>A little quicker</small></span></label>
-              <label><input type="radio" name="pace" value="lively" /><span><strong>Lively</strong><small>More on screen</small></span></label>
-            </div>
-          </fieldset>
-
-          <fieldset class="choice-group">
-            <legend>Session length</legend>
-            <div class="segmented duration-options">
-              <label><input type="radio" name="duration" value="20" /><span>20 sec</span></label>
-              <label><input type="radio" name="duration" value="30" checked /><span>30 sec</span></label>
-              <label><input type="radio" name="duration" value="60" /><span>1 min</span></label>
-            </div>
-          </fieldset>
-
-          <div class="start-actions">
-            <button id="cameraStart" class="button button-primary" type="button">
-              <span aria-hidden="true">◉</span> Use camera &amp; start
+          <div class="landing-copy">
+            <p class="eyebrow">A playful movement break</p>
+            <h1 id="landingTitle">Gentle<br />Catch</h1>
+            <p class="landing-intro">Move, reach and play together. Designed for joyful, low-pressure movement at Precious Active Ageing Centre.</p>
+            <button id="enterGame" class="button button-primary button-large" type="button" data-testid="enter-game">
+              Let’s get ready <span aria-hidden="true">→</span>
             </button>
-            <button id="keyboardStart" class="button button-secondary" type="button">Play with keyboard</button>
           </div>
-          <p id="cameraMessage" class="camera-message" role="status"></p>
-          <p class="safety-note"><strong>Comfort first.</strong> Stop if movement feels uncomfortable. A caregiver can help with the first camera permission.</p>
+          <div class="welcome-card" aria-label="How a session works">
+            <p class="welcome-card-label">A session in three gentle steps</p>
+            <ol>
+              <li><span>1</span><div><strong>Choose</strong><small>Solo or play together</small></div></li>
+              <li><span>2</span><div><strong>Wave hello</strong><small>Register face and hands</small></div></li>
+              <li><span>3</span><div><strong>Catch</strong><small>Move at your own pace</small></div></li>
+            </ol>
+            <p class="comfort-note"><span aria-hidden="true">♥</span> Seated and standing play are both welcome.</p>
+          </div>
+        </section>
+
+        <section id="setupPanel" class="setup-panel screen-panel" aria-labelledby="setupTitle" hidden>
+          <div class="setup-heading">
+            <button id="backToWelcome" class="text-button" type="button">← Welcome</button>
+            <p class="eyebrow">Set up your session</p>
+            <h2 id="setupTitle">How would you like to play?</h2>
+          </div>
+
+          <fieldset class="choice-group mode-group">
+            <legend>Players</legend>
+            <div class="mode-options">
+              <label>
+                <input type="radio" name="playMode" value="solo" checked />
+                <span class="mode-card">
+                  <span class="mode-icon" aria-hidden="true">●</span>
+                  <span><strong>Solo</strong><small>One person · one or both hands</small></span>
+                  <span class="mode-check" aria-hidden="true">✓</span>
+                </span>
+              </label>
+              <label>
+                <input type="radio" name="playMode" value="pvp" />
+                <span class="mode-card">
+                  <span class="mode-icon mode-icon-pvp" aria-hidden="true">● ●</span>
+                  <span><strong>Split-screen battle</strong><small>Two people · one hand each</small></span>
+                  <span class="mode-check" aria-hidden="true">✓</span>
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="setup-options">
+            <fieldset class="choice-group">
+              <legend>Choose a pace</legend>
+              <div class="segmented pace-options">
+                <label><input type="radio" name="pace" value="gentle" checked /><span><strong>Gentle</strong><small>More time to reach</small></span></label>
+                <label><input type="radio" name="pace" value="steady" /><span><strong>Steady</strong><small>A little quicker</small></span></label>
+                <label><input type="radio" name="pace" value="lively" /><span><strong>Lively</strong><small>More on screen</small></span></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="choice-group">
+              <legend>Session length</legend>
+              <div class="segmented duration-options">
+                <label><input type="radio" name="duration" value="20" /><span>20 sec</span></label>
+                <label><input type="radio" name="duration" value="30" checked /><span>30 sec</span></label>
+                <label><input type="radio" name="duration" value="60" /><span>1 min</span></label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="start-card">
+            <div>
+              <strong>Ready for the camera check?</strong>
+              <p>We will register your face and hands before the game begins.</p>
+            </div>
+            <div class="start-actions">
+              <button id="cameraStart" class="button button-primary" type="button" data-testid="camera-start">Continue with camera</button>
+              <button id="keyboardStart" class="button button-secondary" type="button">Try solo with keyboard</button>
+            </div>
+            <p id="cameraMessage" class="camera-message" role="status"></p>
+          </div>
+          <p class="safety-note"><strong>Comfort first.</strong> Move only as far as feels comfortable, and stop at any time.</p>
+        </section>
+
+        <section id="registrationPanel" class="registration-panel screen-panel" aria-labelledby="registrationTitle" hidden>
+          <div class="registration-copy">
+            <button id="cancelRegistration" class="text-button" type="button">← Change setup</button>
+            <p class="eyebrow">Camera registration</p>
+            <h2 id="registrationTitle">Look forward and raise your hand<span id="registrationPlural">s</span></h2>
+            <p id="registrationInstruction">Keep your face and hands comfortably visible. We will begin after a three-second countdown.</p>
+            <div class="registration-players" aria-hidden="true">
+              <span class="player-key player-one-key"><i></i> Player 1</span>
+              <span id="playerTwoKey" class="player-key player-two-key"><i></i> Player 2</span>
+            </div>
+            <div id="registrationStatus" class="registration-status" role="status">
+              <span class="pulse-dot" aria-hidden="true"></span>
+              <strong>Starting face and hand tracking…</strong>
+            </div>
+            <div id="faceLockProgress" class="face-lock-progress" aria-label="Player registration progress">
+              <div class="face-lock-heading">
+                <span>Player check</span>
+                <strong id="faceModelStatus">Starting scanner…</strong>
+              </div>
+              <div id="facePlayerOne" class="face-lock-player">
+                <span class="face-lock-number">1</span>
+                <span><strong>Player 1</strong><small>Show your face and hand</small></span>
+                <i aria-hidden="true">○</i>
+              </div>
+              <div id="facePlayerTwo" class="face-lock-player">
+                <span class="face-lock-number">2</span>
+                <span><strong>Player 2</strong><small>Show your face and hand</small></span>
+                <i aria-hidden="true">○</i>
+              </div>
+            </div>
+            <p class="registration-tip">Player 1 stays on the left; Player 2 stays on the right. Raise one hand beside your face on your own side.</p>
+          </div>
+          <div id="registrationStage" class="registration-stage">
+            <video id="registrationVideo" muted playsinline aria-label="Mirrored camera preview for hand registration"></video>
+            <div class="camera-soften" aria-hidden="true"></div>
+            <div class="registration-guide" aria-hidden="true">
+              <span class="guide-hand">✋</span>
+              <span>Keep faces and hands inside this area</span>
+            </div>
+            <div id="registrationCursors" class="player-cursors" aria-hidden="true">
+              <div class="player-cursor hand-one" hidden><span></span></div>
+              <div class="player-cursor hand-two" hidden><span></span></div>
+            </div>
+            <div id="registrationFaces" class="face-anchors" aria-hidden="true">
+              <div class="face-anchor face-one" hidden><span>1</span></div>
+              <div class="face-anchor face-two" hidden><span>2</span></div>
+            </div>
+            <div id="countdownBadge" class="countdown-badge" hidden aria-live="assertive">
+              <small>Starting in</small><strong id="countdownValue">3</strong>
+            </div>
+          </div>
         </section>
 
         <section id="playPanel" class="play-panel" aria-label="Gentle Catch play area" hidden>
           <div class="game-toolbar">
-            <div class="stat"><span>Score</span><strong id="scoreValue">0</strong></div>
-            <div class="stat streak-stat"><span>Streak</span><strong><span id="streakValue">0</span> <small id="multiplierValue">×1</small></strong></div>
+            <div class="player-score player-score-one"><span>Player 1</span><strong id="playerOneScore">0</strong><small id="playerOneStreak">Ready</small></div>
+            <div id="playerTwoScoreCard" class="player-score player-score-two" hidden><span>Player 2</span><strong id="playerTwoScore">0</strong><small id="playerTwoStreak">Ready</small></div>
             <div class="stat"><span>Caught</span><strong id="caughtValue">0</strong></div>
             <div class="stat"><span>Missed</span><strong><span id="missedValue">0</span>/<span id="missLimit">8</span></strong></div>
-            <div class="stat time-stat"><span>Time left</span><strong id="timeValue">1:00</strong></div>
+            <div class="stat time-stat"><span>Time left</span><strong id="timeValue">0:30</strong></div>
             <div class="toolbar-actions">
               <button id="pauseButton" class="button button-small" type="button">Pause</button>
               <button id="endButton" class="button button-small button-quiet" type="button">End session</button>
@@ -74,14 +182,43 @@
           <div id="gameBoard" class="game-board" tabindex="0" aria-describedby="playInstructions">
             <video id="cameraVideo" muted playsinline aria-label="Your mirrored camera view"></video>
             <div class="camera-wash" aria-hidden="true"></div>
+            <div id="pvpArena" class="pvp-arena" hidden aria-hidden="true">
+              <div class="battle-lane battle-lane-one">
+                <div class="lane-hud">
+                  <span>Player 1</span>
+                  <strong id="laneOneScore">0</strong>
+                  <small id="laneOneStreak">Ready</small>
+                </div>
+              </div>
+              <div class="battle-divider"><span>VS</span></div>
+              <div class="battle-lane battle-lane-two">
+                <div class="lane-hud">
+                  <span>Player 2</span>
+                  <strong id="laneTwoScore">0</strong>
+                  <small id="laneTwoStreak">Ready</small>
+                </div>
+              </div>
+            </div>
             <div id="targets" class="targets" aria-hidden="true"></div>
             <div id="playerCursors" class="player-cursors" aria-hidden="true">
-              <div class="player-cursor hand-one" hidden><span></span></div>
-              <div class="player-cursor hand-two" hidden><span></span></div>
+              <div class="player-cursor hand-one" hidden><span></span><b>1</b></div>
+              <div class="player-cursor hand-two" hidden><span></span><b>2</b></div>
             </div>
             <div id="trackingStatus" class="tracking-status" hidden>
               <span class="tracking-dot" aria-hidden="true"></span>
               <strong>Looking for your hands</strong>
+            </div>
+            <div id="trackingRecovery" class="tracking-recovery" hidden role="alert" aria-live="assertive">
+              <div class="tracking-recovery-card">
+                <span class="tracking-recovery-icon" aria-hidden="true">👋</span>
+                <strong id="recoveryTitle">Come back into frame</strong>
+                <small id="recoveryMessage">Looking for your face and hand…</small>
+                <div class="recovery-checks" aria-hidden="true">
+                  <span id="recoveryFaceCheck">○ Face</span>
+                  <span id="recoveryHandCheck">○ Hand</span>
+                </div>
+                <p>The round is paused while we reconnect you.</p>
+              </div>
             </div>
             <div id="pauseOverlay" class="pause-overlay" hidden>
               <div><span aria-hidden="true">Ⅱ</span><strong>Taking a pause</strong><small>Continue whenever you are ready.</small></div>
@@ -91,22 +228,25 @@
           <p id="inputHint" class="input-hint">Your hands control the circles.</p>
         </section>
 
-        <section id="resultsPanel" class="results-panel" aria-labelledby="resultsTitle" hidden>
+        <section id="resultsPanel" class="results-panel screen-panel" aria-labelledby="resultsTitle" hidden>
           <div class="result-icon" aria-hidden="true">★</div>
           <p class="eyebrow">Session complete</p>
           <h2 id="resultsTitle">Lovely movement!</h2>
           <p id="resultMessage" class="result-message">You caught 0 garden shapes.</p>
           <div class="result-stats">
-            <div><span>Score</span><strong id="finalScore">0</strong></div>
-            <div><span>Caught</span><strong id="finalCaught">0</strong></div>
-            <div><span>Best streak</span><strong id="finalStreak">0</strong></div>
+            <div><span id="finalPlayerOneLabel">Score</span><strong id="finalPlayerOneScore">0</strong></div>
+            <div id="finalPlayerTwoCard" hidden><span>Player 2</span><strong id="finalPlayerTwoScore">0</strong></div>
+            <div><span>Caught together</span><strong id="finalCaught">0</strong></div>
           </div>
-          <button id="playAgain" class="button button-primary" type="button">Play another session</button>
+          <div class="result-actions">
+            <button id="playAgain" class="button button-primary" type="button">Play another session</button>
+            <button id="backHome" class="button button-secondary" type="button">Back to welcome</button>
+          </div>
         </section>
       </main>
 
       <footer>
-        <p>Images are processed in browser memory and immediately discarded. Gentle Catch is a recreational wellbeing game, not a medical device.</p>
+        <p>Camera images are processed in browser memory and immediately discarded. Gentle Catch is a recreational wellbeing game, not a medical device.</p>
       </footer>
       <div id="statusLive" class="sr-only" aria-live="polite"></div>
     </div>
