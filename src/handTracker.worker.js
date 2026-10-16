@@ -1,84 +1,78 @@
-import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
-import { getPalmCenter } from "./handTrackingMath.js";
+import { FilesetResolver, HandLandmarker, PoseLandmarker } from "@mediapipe/tasks-vision";
+import { TrackingEngine } from "./trackingEngine.js";
 
-let landmarker = null;
-let backend = "CPU";
+let engine = null;
 
-async function createLandmarker(wasmBaseUrl, modelUrl) {
-  const modelBuffer = new Uint8Array(await (await fetch(modelUrl)).arrayBuffer());
-
-  async function create(delegate) {
-    const vision = await FilesetResolver.forVisionTasks(wasmBaseUrl, true);
-    return HandLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetBuffer: modelBuffer, delegate },
-      runningMode: "VIDEO",
-      numHands: 2,
-      minHandDetectionConfidence: 0.5,
-      minHandPresenceConfidence: 0.45,
-      minTrackingConfidence: 0.55,
-    });
-  }
-
-  try {
-    landmarker = await create("GPU");
-    backend = "GPU";
-  } catch (gpuError) {
-    console.info("GPU hand tracking unavailable; using CPU.", gpuError);
-    landmarker = await create("CPU");
-    backend = "CPU";
-  }
-}
-
-self.addEventListener("message", async (event) => {
-  const message = event.data;
-
+self.addEventListener("message", async ({ data: message }) => {
   if (message.type === "INIT") {
     try {
-      await createLandmarker(message.wasmBaseUrl, message.modelUrl);
-      self.postMessage({ type: "READY", backend });
+      const vision = await FilesetResolver.forVisionTasks(message.wasmBaseUrl, true);
+      let instance = 0;
+      const buffers = new Map();
+      engine = new TrackingEngine(async (model, delegate) => {
+        if (!buffers.has(model)) {
+          const response = await fetch(model === "pose" ? message.poseModelUrl : message.handModelUrl);
+          if (!response.ok) throw new Error(`Could not load the ${model} model (${response.status}).`);
+          buffers.set(model, new Uint8Array(await response.arrayBuffer()));
+        }
+        const common = {
+          baseOptions: { modelAssetBuffer: buffers.get(model), delegate },
+          runningMode: "VIDEO",
+          minTrackingConfidence: 0.5,
+        };
+        // The ES-module loader exports ModuleFactory via a global which MediaPipe
+        // consumes. A distinct loader URL reruns that module for each instance;
+        // the large WASM binary URL remains shared and cacheable.
+        const loaderUrl = new URL(vision.wasmLoaderPath);
+        loaderUrl.searchParams.set("instance", String(++instance));
+        const fileset = { ...vision, wasmLoaderPath: loaderUrl.href };
+        return model === "pose"
+          ? PoseLandmarker.createFromOptions(fileset, {
+              ...common, numPoses: 1, outputSegmentationMasks: false,
+              minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5,
+            })
+          : HandLandmarker.createFromOptions(fileset, {
+              ...common, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.45,
+            });
+      });
+      const status = await engine.initialize(message.model, message.backend);
+      self.postMessage({ type: "READY", ...status });
     } catch (error) {
-      self.postMessage({ type: "INIT_ERROR", error: error?.message || "Hand tracker could not load." });
+      engine?.close();
+      self.postMessage({ type: "INIT_ERROR", error: error?.message || "Tracker could not load." });
     }
     return;
   }
 
-  if (message.type === "DETECT") {
-    if (!landmarker) {
-      message.bitmap.close();
-      self.postMessage({ type: "DETECT_ERROR", generation: message.generation, error: "Hand tracker is not ready." });
-      return;
-    }
-
-    const startedAt = performance.now();
+  if (message.type === "WARMUP" || message.type === "DETECT") {
     try {
-      const result = landmarker.detectForVideo(message.bitmap, message.timestampMs);
-      const hands = result.landmarks.map((landmarks, index) => {
-        const palm = getPalmCenter(landmarks);
-        const handedness = result.handedness[index]?.[0];
-        return {
-          ...palm,
-          label: handedness?.categoryName || `hand-${index}`,
-          confidence: handedness?.score ?? 1,
-        };
-      }).filter((hand) => Number.isFinite(hand.x) && Number.isFinite(hand.y));
+      if (!engine) throw new Error("Tracker is not ready.");
+      const result = message.type === "WARMUP"
+        ? engine.calibrate(message.bitmap, message.timestampMs)
+        : await engine.detect(message.bitmap, message.timestampMs);
       self.postMessage({
-        type: "RESULT",
-        hands,
+        type: message.type === "WARMUP" ? "PREPARED" : "RESULT",
+        ...result,
         generation: message.generation,
+        requestId: message.requestId,
         timestampMs: message.timestampMs,
-        inferenceMs: performance.now() - startedAt,
-        backend,
       });
     } catch (error) {
-      self.postMessage({ type: "DETECT_ERROR", generation: message.generation, error: error?.message || "Hand detection failed." });
+      self.postMessage({
+        type: message.type === "WARMUP" ? "WARMUP_ERROR" : "DETECT_ERROR",
+        generation: message.generation,
+        requestId: message.requestId,
+        error: error?.message || "Tracking failed.",
+      });
     } finally {
       message.bitmap.close();
     }
+    return;
   }
 
   if (message.type === "CLOSE") {
-    landmarker?.close();
-    landmarker = null;
+    engine?.close();
+    engine = null;
     self.close();
   }
 });

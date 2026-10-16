@@ -4,13 +4,15 @@ Gentle Catch is a calm, camera-controlled movement game designed with older adul
 
 ## Why it runs well on a Raspberry Pi
 
-The browser requests a 720p camera stream for a clear display. A worker downsamples frames to 512 × 288 and runs MediaPipe Hand Landmarker away from the game animation, tracking up to two palms at once. Busy inference frames are skipped instead of queued. A lightweight velocity-aware filter limits sudden landmark spikes, while bounded prediction updates the cursor at the display refresh rate between camera results. The hand model and WebAssembly runtime are included in the project, so there is no model download during play.
+The browser requests a 640 × 360 camera stream (up to 480 pixels high for cameras that negotiate 4:3). A worker runs MediaPipe Pose Landmarker Lite to track both wrists of one player with arm context, instead of requiring a recognizable open palm. Inference frames are resized to 384 pixels wide while preserving camera aspect ratio. Segmentation is disabled.
+
+Before the session timer starts, CPU and GPU delegates are warmed and timed on the same camera image. The faster working delegate is kept; the other instance is closed. A bundled Hand Landmarker is available if pose initialization fails. Busy frames are skipped rather than queued, capture timestamps are preserved, and inference cadence adapts to processing time. One velocity-aware filter and bounded prediction feed the game's independent display loop. Camera coordinates account for the displayed video's crop, and stale cursors cannot score. Models and WASM are served locally with the application.
 
 No image or video leaves the device. Hand landmark inference happens locally in browser memory.
 
 ## Laptop quick start
 
-Requirements: Node.js 20.19+ or 22.12+ and a current Chrome, Edge, or Firefox browser.
+Requirements: Node.js 22.12+ (22.x), 24.x, or 26+ and a current Chrome, Edge, or Firefox browser. Node 22 is recommended for the Pi.
 
 ```bash
 npm install
@@ -25,7 +27,7 @@ Open `http://localhost:5173`, select a pace, and allow camera access. Camera acc
 - Sessions can be 20 seconds, 30 seconds, or 1 minute.
 - Pause or end a session at any time. Space or Escape also pauses when playing with the keyboard.
 - The game supports keyboard navigation, large controls, semantic labels, reduced motion, high contrast preferences, and responsive layouts.
-- One or both hands can be used simultaneously. Each palm gets its own cursor.
+- One or both hands can be used simultaneously. Keep your shoulders, arms and hands in camera view; each wrist/hand gets its own cursor.
 - It can be played seated or standing. The player should stop if movement is uncomfortable.
 
 ## Raspberry Pi 5 kiosk deployment
@@ -41,14 +43,31 @@ npm run preview -- --port 4173
 For a kiosk session, launch Chromium after the server starts:
 
 ```bash
-chromium-browser --kiosk --autoplay-policy=no-user-gesture-required http://localhost:4173
+chromium --kiosk --autoplay-policy=no-user-gesture-required http://localhost:4173
 ```
 
-The site is entirely static after `npm run build`; `vite preview` can be replaced by nginx, Caddy, or any local static server serving `dist/`. The first camera permission must be accepted by a caregiver. For automatic kiosk startup, save the server and Chromium commands in a systemd user service or the desktop autostart configuration.
+The site is entirely static after `npm run build`. Use `npm run preview` to check the optimized build locally, and nginx, Caddy, or another static server serving `dist/` for permanent deployment. `npm run dev` includes development tooling and should not be used as the kiosk server. If your OS names Chromium `chromium-browser`, use that command instead. The first camera permission must be accepted by a caregiver. For automatic kiosk startup, save the server and Chromium commands in a systemd user service or the desktop autostart configuration. Use adequate power and active cooling for sustained Pi sessions.
+
+After pulling an update, run `npm ci` and `npm run build` again before restarting the server; preview serves the existing `dist/` build.
+
+## Local performance diagnostics
+
+Run `window.gentleCatchDiagnostics()` in the browser console for the selected model/delegate, calibration timings, capture/processing latency percentiles, render cadence and dropout counts. These statistics stay in memory and are never uploaded. An empty camera view during calibration may favor a different backend than a visible player, so show your upper body during startup.
+
+For controlled comparisons, use `?tracker=hands` to select the previous detailed hand model, and `?backend=CPU` or `?backend=GPU` to force a delegate. The default is pose tracking with measured backend selection. Backend overrides are for diagnostics; GPU availability and performance depend on the browser/driver.
+
+Developer browser checks are available under `/tests/browser-smoke.html` (actual models) and `/tests/camera-smoke.html` (the actual app with a synthetic camera) while running `npm run dev`. Download the public [MediaPipe pose test image](https://storage.googleapis.com/mediapipe-assets/pose.jpg) first:
+
+```bash
+mkdir -p tests/fixtures
+curl -fL https://storage.googleapis.com/mediapipe-assets/pose.jpg -o tests/fixtures/pose.jpg
+```
+
+The fixture is deliberately not redistributed or included in production builds. Add the same model/backend query options to compare delegates. After building, `/tests/browser-smoke.html?built` exercises the minified worker and model/WASM copies from dist. The synthetic camera fixture requires no camera permission. See [the performance audit](docs/performance-audit.md) for verified behavior and the limits of those measurements.
 
 ## Privacy and limitations
 
-Processing happens in browser memory. Frames are discarded immediately and are never stored or uploaded. The tracker estimates 21 landmarks on each visible hand and uses the palm center as the cursor. Occlusion, very low light, motion blur, or hands outside the camera view can briefly interrupt tracking. It is a recreational wellbeing game, not a medical device, fall detector, or rehabilitation assessment.
+Processing happens in browser memory. Frames are discarded immediately and are never stored or uploaded. The default tracker estimates body landmarks for one player and uses each visible wrist plus a small forearm-based palm offset as the cursor. It does not require finger gestures. The hand-model fallback estimates 21 landmarks per visible hand. Occlusion, very low light, motion blur, or hands outside the camera view can still interrupt tracking; a hidden wrist is not reconstructed from the elbow alone. It is a recreational wellbeing game, not a medical device, fall detector, or rehabilitation assessment.
 
 ## Commands
 

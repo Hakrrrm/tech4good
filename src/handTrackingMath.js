@@ -5,20 +5,58 @@ const MAX_HANDS = 2;
 const REACQUIRE_MS = 140;
 const TRACKING_GRACE_MS = 140;
 const CURSOR_HOLD_MS = 360;
-const MIN_CUTOFF = 2.5;
-const SPEED_COEFFICIENT = 1.4;
-const DERIVATIVE_CUTOFF = 3;
+const MIN_CUTOFF = 5;
+const SPEED_COEFFICIENT = 2.8;
+const DERIVATIVE_CUTOFF = 6;
 const MAX_PREDICTION_MS = 45;
 const MAX_PREDICTION_DISTANCE = 0.075;
 
 export function getPalmCenter(landmarks) {
-  const points = PALM_LANDMARKS.map((index) => landmarks[index]).filter(Boolean);
+  const points = PALM_LANDMARKS.map((index) => landmarks[index])
+    .filter((point) => point && Number.isFinite(point.x) && Number.isFinite(point.y));
   if (!points.length) return null;
   const total = points.reduce(
     (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
     { x: 0, y: 0 },
   );
   return { x: total.x / points.length, y: total.y / points.length };
+}
+
+export function getPoseHands(landmarks) {
+  return [
+    { wrist: 15, elbow: 13, label: "Left" },
+    { wrist: 16, elbow: 14, label: "Right" },
+  ].flatMap(({ wrist: wristIndex, elbow: elbowIndex, label }) => {
+    const wrist = landmarks[wristIndex];
+    if (
+      !wrist || !Number.isFinite(wrist.x) || !Number.isFinite(wrist.y)
+      || wrist.x < 0 || wrist.x > 1 || wrist.y < 0 || wrist.y > 1
+      || (wrist.visibility ?? 0) < 0.5 || (wrist.presence ?? 1) < 0.5
+    ) return [];
+    const elbow = landmarks[elbowIndex];
+    let x = wrist.x;
+    let y = wrist.y;
+    if (elbow && Number.isFinite(elbow.x) && Number.isFinite(elbow.y) && (elbow.visibility ?? 0) >= 0.5) {
+      // Shift slightly along the visible forearm toward the palm, never inventing an occluded wrist.
+      const dx = (wrist.x - elbow.x) * 0.12;
+      const dy = (wrist.y - elbow.y) * 0.12;
+      const scale = Math.min(1, 0.035 / (Math.hypot(dx, dy) || 1));
+      x += dx * scale;
+      y += dy * scale;
+    }
+    return [{ x, y, label, confidence: Math.min(wrist.visibility, wrist.presence ?? 1), stableSide: true }];
+  });
+}
+
+// The video uses object-fit: cover. Cursor and collision coordinates must share its crop.
+export function mapCameraPoint(point, videoWidth, videoHeight, boardWidth, boardHeight) {
+  if (!videoWidth || !videoHeight || !boardWidth || !boardHeight) return point;
+  const scale = Math.max(boardWidth / videoWidth, boardHeight / videoHeight);
+  return {
+    ...point,
+    x: clamp((point.x * videoWidth * scale - (videoWidth * scale - boardWidth) / 2) / boardWidth, 0.03, 0.97),
+    y: clamp((point.y * videoHeight * scale - (videoHeight * scale - boardHeight) / 2) / boardHeight, 0.04, 0.96),
+  };
 }
 
 function smoothingAlpha(cutoff, elapsedSeconds) {
@@ -43,16 +81,6 @@ function limitSingleFrameJump(previous, next, elapsedMs) {
   return {
     x: start.x + (next.x - start.x) * scale,
     y: start.y + (next.y - start.y) * scale,
-  };
-}
-
-export function adaptiveSmoothing(previous, next, elapsedMs) {
-  if (!previous || elapsedMs > REACQUIRE_MS) return next;
-  const distanceMoved = distance(previous, next);
-  const alpha = distanceMoved > 0.12 ? 0.86 : distanceMoved > 0.045 ? 0.66 : 0.42;
-  return {
-    x: lowPass(previous.x, next.x, alpha),
-    y: lowPass(previous.y, next.y, alpha),
   };
 }
 
@@ -98,13 +126,15 @@ export function updateHandSlots(previousSlots, detections, timestamp) {
   });
   const usedSlots = new Set();
 
-  for (const detection of detections.slice(0, MAX_HANDS)) {
+  for (const detection of detections.filter((hand) => Number.isFinite(hand.x) && Number.isFinite(hand.y)).slice(0, MAX_HANDS)) {
     const mirrored = {
       x: clamp(1 - detection.x, 0.03, 0.97),
       y: clamp(detection.y, 0.04, 0.96),
     };
 
-    let slotIndex = slots.findIndex((slot, index) =>
+    let slotIndex = detection.stableSide
+      ? (detection.label === "Left" ? 0 : 1)
+      : slots.findIndex((slot, index) =>
       !usedSlots.has(index)
       && slot?.label === detection.label
       && timestamp - slot.lastSeen < 1000
@@ -151,9 +181,7 @@ export function updateHandSlots(previousSlots, detections, timestamp) {
   });
 }
 
-export function presentHandSlots(slots, previousPresented, timestamp, elapsedMs) {
-  const blendAlpha = 1 - Math.exp(-clamp(elapsedMs, 0, 50) / 18);
-
+export function presentHandSlots(slots, previousPresented, timestamp) {
   return Array.from({ length: MAX_HANDS }, (_, index) => {
     const slot = slots[index];
     if (!slot || timestamp - slot.lastSeen > CURSOR_HOLD_MS) return null;
@@ -172,17 +200,9 @@ export function presentHandSlots(slots, previousPresented, timestamp, elapsedMs)
       x: clamp(slot.x + predictionX, 0.03, 0.97),
       y: clamp(slot.y + predictionY, 0.04, 0.96),
     };
-    const previous = previousPresented[index];
-    const position = previous
-      ? {
-          x: lowPass(previous.x, target.x, blendAlpha),
-          y: lowPass(previous.y, target.y, blendAlpha),
-        }
-      : target;
-
     return {
       ...slot,
-      ...position,
+      ...target,
       visible: true,
       interactive: timestamp - slot.lastSeen <= TRACKING_GRACE_MS,
     };

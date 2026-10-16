@@ -1,6 +1,7 @@
 import "./styles.css";
 import { applyObjectScore, circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "./gameLogic.js";
 import { HandTracker } from "./handTracker.js";
+import { mapCameraPoint } from "./handTrackingMath.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -58,22 +59,47 @@ const state = {
   keys: new Set(),
   stream: null,
   animationId: null,
+  starting: false,
 };
 
+const boardSize = { width: 1, height: 1 };
+function measureBoard() {
+  boardSize.width = Math.max(elements.board.clientWidth, 1);
+  boardSize.height = Math.max(elements.board.clientHeight, 1);
+}
+const boardObserver = new ResizeObserver(measureBoard);
+boardObserver.observe(elements.board);
+const trackingOptions = new URLSearchParams(window.location.search);
 const tracker = new HandTracker(elements.video, (hands) => {
   if (state.running && !state.paused && state.mode === "camera") {
-    state.players = hands.map((hand) => hand ? { ...hand, radius: 44 } : null);
+    state.players = hands.map((hand) => hand ? {
+      ...mapCameraPoint(hand, elements.video.videoWidth, elements.video.videoHeight, boardSize.width, boardSize.height),
+      radius: 44,
+    } : null);
   }
 }, (status) => {
   if (!state.running || state.mode !== "camera") return;
   if (status.type === "tracking") updateTrackingStatus(status.count);
   if (status.type === "error") {
-    elements.trackingStatusText.textContent = "Tracking is recovering…";
-    elements.statusLive.textContent = "Hand tracking is recovering.";
+    trackingCount = -1;
+    const message = status.fatal
+      ? "Tracking stopped — end this session and start again."
+      : "Tracking is recovering…";
+    elements.trackingStatusText.textContent = message;
+    elements.statusLive.textContent = message;
   }
+}, {
+  model: trackingOptions.get("tracker") === "hands" ? "hands" : "pose",
+  backend: ["CPU", "GPU"].includes(trackingOptions.get("backend")) ? trackingOptions.get("backend") : null,
 });
 
+// Local, read-only diagnostics: no image data or network/telemetry.
+window.gentleCatchDiagnostics = () => tracker.diagnostics.snapshot();
+let trackingCount = -1;
+
 function updateTrackingStatus(count) {
+  if (count === trackingCount) return;
+  trackingCount = count;
   if (count >= 2) {
     elements.trackingStatus.classList.add("two-hands");
     elements.trackingStatusText.textContent = "Two hands ready";
@@ -97,15 +123,15 @@ async function requestCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
     video: {
-      width: { ideal: 1280, max: 1280 },
-      height: { ideal: 720, max: 720 },
+      width: { ideal: 640, max: 640 },
+      height: { ideal: 360, max: 480 },
       facingMode: "user",
       frameRate: { ideal: 30, max: 30 },
     },
   });
+  state.stream = stream;
   elements.video.srcObject = stream;
   await elements.video.play();
-  state.stream = stream;
 }
 
 function stopCamera() {
@@ -116,19 +142,28 @@ function stopCamera() {
 }
 
 async function startWithCamera() {
+  if (state.starting || state.running) return;
+  state.starting = true;
   elements.cameraStart.disabled = true;
+  elements.keyboardStart.disabled = true;
   elements.cameraStart.textContent = "Loading hand tracking…";
-  elements.cameraMessage.textContent = "Your browser may ask for camera permission. The hand model stays on this device.";
+  elements.cameraMessage.textContent = "Allow camera access, then show your arms and hands while tracking prepares.";
   try {
-    await Promise.all([requestCamera(), tracker.initialize()]);
-    tracker.start();
+    const startup = await Promise.allSettled([requestCamera(), tracker.initialize()]);
+    const failure = startup.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+    elements.cameraStart.textContent = "Preparing movement tracking…";
+    await tracker.warmUp();
     startSession("camera");
+    tracker.start();
   } catch (error) {
     stopCamera();
     elements.cameraMessage.textContent = `${error.message || "The camera could not start."} You can still play with the keyboard.`;
     elements.keyboardStart.focus();
   } finally {
+    state.starting = false;
     elements.cameraStart.disabled = false;
+    elements.keyboardStart.disabled = false;
     elements.cameraStart.innerHTML = '<span aria-hidden="true">◉</span> Use camera &amp; start';
   }
 }
@@ -157,12 +192,13 @@ function startSession(mode) {
   elements.setup.hidden = true;
   elements.results.hidden = true;
   elements.play.hidden = false;
+  measureBoard();
   elements.video.hidden = mode !== "camera";
   elements.trackingStatus.hidden = mode !== "camera";
   updateTrackingStatus(0);
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
-    ? "Your palms control the circles. Catch garden shapes and avoid bombs and germs."
+    ? "Your hands control the circles. Keep your arms in view. Catch garden shapes and avoid bombs and germs."
     : "Use the arrow keys or W A S D. Catch garden shapes and avoid bombs and germs.";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
@@ -231,6 +267,7 @@ function gameLoop(now) {
   }
 
   updateKeyboard(deltaSeconds);
+  if (state.mode === "camera") tracker.presentHands(now);
   spawnObject(now);
   updateObjects(deltaSeconds, now);
   updateStats();
@@ -239,11 +276,12 @@ function gameLoop(now) {
 }
 
 function updateObjects(deltaSeconds, now) {
-  const boardHeight = elements.board.clientHeight;
-  const boardWidth = elements.board.clientWidth;
+  const boardHeight = boardSize.height;
+  const boardWidth = boardSize.width;
   const fallRate = getPaceConfig(state.pace).fallSpeed / Math.max(boardHeight, 1);
 
   for (const object of [...state.objects]) {
+    if (!state.running) break;
     object.y += fallRate * deltaSeconds;
     const sway = Math.sin(now / 650 + object.phase) * object.drift;
     const displayX = clamp(object.x + sway, 0.05, 0.95);
@@ -306,23 +344,27 @@ function missObject(object) {
 function renderCursors() {
   elements.cursors.forEach((cursor, index) => {
     const player = state.players[index];
-    cursor.hidden = !player;
+    if (cursor.hidden !== !player) cursor.hidden = !player;
     if (!player) return;
-    cursor.style.left = `${player.x * 100}%`;
-    cursor.style.top = `${player.y * 100}%`;
+    cursor.style.transform = `translate3d(${player.x * boardSize.width}px, ${player.y * boardSize.height}px, 0) translate(-50%, -50%)`;
   });
 }
 
 function updateStats() {
   const config = getPaceConfig(state.pace);
-  elements.score.textContent = state.score;
-  elements.streak.textContent = state.streak;
-  elements.multiplier.textContent = `×${state.multiplier}`;
+  setText(elements.score, state.score);
+  setText(elements.streak, state.streak);
+  setText(elements.multiplier, `×${state.multiplier}`);
   elements.multiplier.classList.toggle("active", state.multiplier > 1);
-  elements.caught.textContent = state.caught;
-  elements.missed.textContent = state.missed;
-  elements.missLimit.textContent = config.missLimit;
-  elements.time.textContent = formatTime(state.remainingSeconds);
+  setText(elements.caught, state.caught);
+  setText(elements.missed, state.missed);
+  setText(elements.missLimit, config.missLimit);
+  setText(elements.time, formatTime(state.remainingSeconds));
+}
+
+function setText(element, value) {
+  const text = String(value);
+  if (element.textContent !== text) element.textContent = text;
 }
 
 function togglePause() {
@@ -401,4 +443,5 @@ window.addEventListener("blur", () => state.keys.clear());
 window.addEventListener("beforeunload", () => {
   stopCamera();
   tracker.dispose();
+  boardObserver.disconnect();
 });

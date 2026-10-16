@@ -9,9 +9,10 @@ import {
   randomObjectType,
 } from "../src/gameLogic.js";
 import {
-  adaptiveSmoothing,
   filterHandPosition,
   getPalmCenter,
+  getPoseHands,
+  mapCameraPoint,
   presentHandSlots,
   updateHandSlots,
 } from "../src/handTrackingMath.js";
@@ -62,17 +63,54 @@ describe("game helpers", () => {
 });
 
 describe("hand tracking helpers", () => {
+  it("uses both anatomical wrists and rejects occluded wrists instead of inventing hands", () => {
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1, presence: 1 }));
+    landmarks[15] = { x: 0.3, y: 0.4, visibility: 0.9, presence: 1 };
+    landmarks[16] = { x: 0.7, y: 0.4, visibility: 0.9, presence: 1 };
+    const hands = getPoseHands(landmarks);
+    expect(hands.map((hand) => hand.label)).toEqual(["Left", "Right"]);
+    expect(hands.every((hand) => hand.stableSide)).toBe(true);
+    landmarks[15].visibility = 0.1;
+    expect(getPoseHands(landmarks).map((hand) => hand.label)).toEqual(["Right"]);
+  });
+
+  it("keeps pose sides in fixed slots through dropout and changed result order", () => {
+    const right = { x: 0.7, y: 0.4, label: "Right", stableSide: true };
+    const left = { x: 0.3, y: 0.4, label: "Left", stableSide: true };
+    let slots = updateHandSlots([], [right], 1000);
+    expect(slots[0]).toBeNull();
+    expect(slots[1].label).toBe("Right");
+    slots = updateHandSlots(slots, [right, left], 1040);
+    expect(slots.map((slot) => slot.label)).toEqual(["Left", "Right"]);
+  });
+
+  it("maps tracking onto the same crop as object-fit cover", () => {
+    const point = { x: 0.6, y: 0.6 };
+    expect(mapCameraPoint(point, 640, 360, 1280, 720)).toEqual(point);
+    // A 16:9 camera covering a 4:3 board crops the horizontal edges.
+    expect(mapCameraPoint(point, 640, 360, 800, 600).x).toBeCloseTo(0.6333333);
+    expect(mapCameraPoint({ x: 0.5, y: 0.5 }, 640, 360, 800, 600)).toEqual({ x: 0.5, y: 0.5 });
+  });
+
+  it("uses capture age to disable stale collisions and caps prediction at camera edges", () => {
+    const slots = [{ x: 0.95, y: 0.95, velocityX: 10, velocityY: 10, lastSeen: 1000 }];
+    const fresh = presentHandSlots(slots, [], 1040)[0];
+    expect(fresh.x).toBeLessThanOrEqual(0.97);
+    expect(fresh.y).toBeLessThanOrEqual(0.96);
+    expect(fresh.interactive).toBe(true);
+    expect(presentHandSlots(slots, [], 1200)[0].interactive).toBe(false);
+    expect(presentHandSlots(slots, [], 1400)[0]).toBeNull();
+  });
+
   it("uses the stable palm landmarks as the cursor anchor", () => {
     const landmarks = Array.from({ length: 21 }, () => ({ x: 0, y: 0 }));
     [0, 5, 9, 13, 17].forEach((index) => { landmarks[index] = { x: 0.4, y: 0.6 }; });
     expect(getPalmCenter(landmarks)).toEqual({ x: 0.4, y: 0.6 });
   });
 
-  it("responds faster to large movement and immediately reacquires a lost hand", () => {
-    const previous = { x: 0.2, y: 0.2 };
-    const quickMove = adaptiveSmoothing(previous, { x: 0.8, y: 0.2 }, 30);
-    expect(quickMove.x).toBeGreaterThan(0.7);
-    expect(adaptiveSmoothing(previous, { x: 0.8, y: 0.2 }, 250)).toEqual({ x: 0.8, y: 0.2 });
+  it("ignores invalid palm points without producing a NaN cursor", () => {
+    expect(getPalmCenter([{ x: NaN, y: 0.5 }])).toBeNull();
+    expect(getPalmCenter([{ x: 0.4, y: 0.6 }])).toEqual({ x: 0.4, y: 0.6 });
   });
 
   it("tracks two mirrored hands independently", () => {
