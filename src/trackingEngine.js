@@ -1,4 +1,5 @@
 import { getPalmCenter, getPoseHands } from "./handTrackingMath.js";
+import { getPosePeople } from "./personTracking.js";
 
 export function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -18,10 +19,11 @@ export class TrackingEngine {
     this.model = null;
   }
 
-  async initialize(preferred = "pose", forcedBackend = null) {
+  async initialize(preferred = "pose", forcedBackend = null, numPeople = 1) {
     this.forcedBackend = forcedBackend;
+    this.numPeople = numPeople;
     const errors = [];
-    for (const model of preferred === "hands" ? ["hands"] : ["pose", "hands"]) {
+    for (const model of numPeople === 2 ? ["pose"] : preferred === "hands" ? ["hands"] : ["pose", "hands"]) {
       for (const backend of forcedBackend ? [forcedBackend] : ["GPU", "CPU"]) {
         try {
           const task = await this.createModel(model, backend);
@@ -104,7 +106,8 @@ export class TrackingEngine {
           const category = detection.result.handedness[index]?.[0];
           return [{ ...palm, label: category?.categoryName ?? `hand-${index}`, confidence: category?.score ?? 1 }];
         });
-    return { hands, inferenceMs: detection.inferenceMs, backend: this.selected.backend, model: this.model };
+    const people = this.numPeople === 2 ? getPosePeople(detection.result.landmarks) : [];
+    return { hands, people, inferenceMs: detection.inferenceMs, backend: this.selected.backend, model: this.model };
   }
 
   close() {

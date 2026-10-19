@@ -11,6 +11,7 @@ vi.mock("../src/handTracker.js", () => ({
       this.hands = [];
       this.diagnostics = { snapshot: () => ({}) };
       this.initialize = vi.fn(async () => {});
+      this.configure = vi.fn();
       this.warmUp = vi.fn(async () => {});
       this.start = vi.fn();
       this.stop = vi.fn(() => onHands([]));
@@ -78,6 +79,125 @@ async function startCamera() {
   await vi.waitFor(() => expect($("#playPanel").hidden).toBe(false));
   return mocks.trackers[0];
 }
+
+function selectPvP() {
+  const input = $('input[name="gameMode"][value="pvp"]');
+  input.checked = true;
+  input.dispatchEvent(new Event("change"));
+}
+
+async function startPvPCamera() {
+  selectPvP();
+  const tracker = await startCamera();
+  tracker.hands = [
+    { x: 0.25, y: 0.04, playerId: 0, interactive: true },
+    { x: 0.25, y: 0.04, playerId: 0, interactive: true },
+    { x: 0.75, y: 0.04, playerId: 1, interactive: true },
+    { x: 0.75, y: 0.04, playerId: 1, interactive: true },
+  ];
+  advance(16);
+  advance(700);
+  return tracker;
+}
+
+describe("PvP sessions", () => {
+  it("waits for both people without consuming match time or spawning treats", async () => {
+    selectPvP();
+    const tracker = await startCamera();
+    tracker.hands = [{ x: 0.25, y: 0.04, playerId: 0, interactive: true }];
+    advance(60000);
+    expect($("#timeValue").textContent).toBe("0:30");
+    expect($("#targets").children).toHaveLength(0);
+    expect($("#resultsPanel").hidden).toBe(true);
+    click("#endButton");
+    expect($("#resultsTitle").textContent).toBe("Match cancelled");
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
+  });
+
+  it("awards each player's paired catch once, isolates hazards/streaks, and announces the winner", async () => {
+    $("#playerName").value = "Alice";
+    $("#secondPlayerName").value = "Bob";
+    const tracker = await startPvPCamera();
+    expect(tracker.configure).toHaveBeenCalledWith(2);
+    advance(1000); advance(1800); advance(1800);
+    expect($("#p1Score").textContent).toBe("80");
+    expect($("#p2Score").textContent).toBe("80");
+    tracker.hands[2].y = tracker.hands[3].y = 0.9;
+    Math.random.mockReturnValueOnce(0.85);
+    advance(1800);
+    expect($("#p1Score").textContent).toBe("55");
+    expect($("#p2Score").textContent).toBe("80");
+    expect($("#p1Detail").textContent).toContain("Streak 0");
+    expect($("#p2Detail").textContent).toContain("Streak 3");
+    advance(30000);
+    expect($("#resultsTitle").textContent).toBe("Bob wins!");
+    expect($("#statusLive").textContent).toContain("Bob wins!");
+    expect($("#pvpResults").textContent).toContain("Alice");
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
+    expect(stopTrack).toHaveBeenCalledOnce();
+  });
+
+  it("prevents an opponent's hand from stealing a lane's target", async () => {
+    const tracker = await startPvPCamera();
+    tracker.hands.forEach((hand) => { hand.x = hand.playerId === 0 ? 0.75 : 0.25; });
+    advance(1000);
+    expect($("#p1Score").textContent).toBe("0");
+    expect($("#p2Score").textContent).toBe("0");
+    expect($("#targets").children).toHaveLength(2);
+    const targets = [...$("#targets").children];
+    expect(targets.map((node) => node.dataset.player)).toEqual(["1", "2"]);
+    expect(targets[0].getAttribute("aria-label")).toBe(targets[1].getAttribute("aria-label"));
+  });
+
+  it("ends a tied match as a draw and restores solo leaderboard behavior on replay", () => {
+    selectPvP();
+    click("#keyboardStart");
+    advance(30000);
+    expect($("#resultsTitle").textContent).toBe("It's a draw!");
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
+    click("#playAgain");
+    const solo = $('input[name="gameMode"][value="solo"]');
+    solo.checked = true;
+    solo.dispatchEvent(new Event("change"));
+    click("#keyboardStart");
+    click("#endButton");
+    expect($("#resultsTitle").textContent).toBe("Lovely movement!");
+    expect($("#pvpResults").hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries).toHaveLength(1);
+  });
+
+  it("gives keyboard players independent controls and excludes pauses from the shared timer", () => {
+    selectPvP();
+    click("#keyboardStart");
+    const cursors = [...document.querySelectorAll(".player-cursor")];
+    const originalP2 = cursors[2].style.transform;
+    const originalP1 = cursors[0].style.transform;
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "d" }));
+    advance(50);
+    expect(cursors[0].style.transform).not.toBe(originalP1);
+    expect(cursors[2].style.transform).toBe(originalP2);
+    click("#pauseButton"); advance(60000); click("#pauseButton");
+    advance(29949);
+    expect($("#resultsPanel").hidden).toBe(true);
+    advance(1);
+    expect($("#resultsPanel").hidden).toBe(false);
+  });
+
+  it("keeps the timed match running beyond the solo miss allowance", () => {
+    selectPvP();
+    $('input[name="pace"][value="lively"]').checked = true;
+    $('input[name="duration"][value="60"]').checked = true;
+    Math.random.mockReturnValue(0);
+    click("#keyboardStart");
+    for (let frame = 0; frame < 1000; frame++) advance(50);
+    expect($("#resultsPanel").hidden).toBe(true);
+    advance(10000);
+    expect($("#resultsPanel").hidden).toBe(false);
+    for (const card of $("#pvpResults").children) {
+      expect(Number(card.textContent.match(/(\d+) missed/)[1])).toBeGreaterThanOrEqual(6);
+    }
+  });
+});
 
 describe("game session regression", () => {
   it.each([

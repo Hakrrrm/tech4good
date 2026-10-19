@@ -30,7 +30,24 @@ Open `http://localhost:5173`, select a pace, and allow camera access. Camera acc
 - One or both hands can be used simultaneously. Keep your shoulders, arms and hands in camera view; each wrist/hand gets its own cursor.
 - It can be played seated or standing. The player should stop if movement is uncomfortable.
 
+## Two-player PvP (experimental)
+
+Select **Two players · PvP**, optionally enter both names, and choose a pace and length.
+
+- Player 1 starts on the **left of the mirrored screen**; Player 2 starts on the **right**. Leave comfortable space and keep both shoulders, arms and hands visible. Stay on your starting sides.
+- Camera mode detects up to two bodies with the bundled Pose Landmarker Lite. Each person's visible wrists control two numbered, colour-coded cursors. Torso proximity preserves ownership when the model changes detection order or briefly loses a person. Overlapping torsos are treated as ambiguous; stale cursors cannot collect objects. This is position tracking, not biometric identification.
+- The clock waits for both players to be detected with at least one usable hand for 0.7 seconds. After that, one shared 20s, 30s or 1-minute timer runs, even if someone leaves the view. Pause stops the clock for both players.
+- Matching waves spawn the same treats and hazards in mirrored positions. Each player can only collect their own side's objects. Points, hazard deductions and streak multipliers follow the solo rules independently. Misses are counted but do not end a PvP match.
+- The higher final score wins; equal scores produce a draw. Ending before both people are ready cancels the match. **End session** after the match starts uses the current scores.
+- Keyboard fallback supports two people: **W A S D** for Player 1, **arrow keys** for Player 2.
+
+Two-person tracking requires pose tracking; the hands-only diagnostic override/fallback is disabled in PvP because it cannot reliably assign hands to people. Models remain local and inference stays in the worker. Two poses cost more than one, so test on your Pi 5 with its intended camera, lighting and cooling. Crossing sides, sustained occlusion, or another person entering the view can confuse identity; return to your original sides to reacquire. Real-world two-person play and Pi performance still need hardware testing.
+
+Developer check: `/tests/camera-smoke.html?pvp` draws two copies of the downloaded public pose fixture into a synthetic camera. Select PvP and start with camera to exercise the actual model, worker, four cursors and match lifecycle without webcam permission. After a build, `/tests/browser-smoke.html?built&pvp` checks that the minified worker detects both poses and all four wrists. These checks verify the pipeline, not real-world movement accuracy.
+
 ## Device-local leaderboard
+
+The leaderboard below is for **solo sessions**. PvP results are shown at the end of the match and are not added to the solo rankings.
 
 Enter an optional name before starting a camera or keyboard session, or leave it blank to play as Guest. Each finished session (including End session or reaching the missed-shape limit) updates the top five for its selected pace and session length. Earlier sessions win score ties; camera/keyboard input is labelled on each row. The leaderboard appears before play and on the results screen, with the current session highlighted if it makes the top five. Small arrow buttons at the bottom cycle through the 20s, 30s and 1 min leaderboards for the displayed pace without changing the next game's selected session length. Game scoring, streaks, timing and hazards are unchanged.
 

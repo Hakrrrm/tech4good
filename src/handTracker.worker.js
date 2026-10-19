@@ -28,14 +28,14 @@ self.addEventListener("message", async ({ data: message }) => {
         const fileset = { ...vision, wasmLoaderPath: loaderUrl.href };
         return model === "pose"
           ? PoseLandmarker.createFromOptions(fileset, {
-              ...common, numPoses: 1, outputSegmentationMasks: false,
+              ...common, numPoses: message.numPeople === 2 ? 2 : 1, outputSegmentationMasks: false,
               minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5,
             })
           : HandLandmarker.createFromOptions(fileset, {
               ...common, numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.45,
             });
       });
-      const status = await engine.initialize(message.model, message.backend);
+      const status = await engine.initialize(message.model, message.backend, message.numPeople);
       self.postMessage({ type: "READY", ...status });
     } catch (error) {
       engine?.close();

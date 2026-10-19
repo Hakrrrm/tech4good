@@ -31,6 +31,12 @@
               <p class="intro">Catch fruit and local favourites, from icing gem biscuits to ondeh-ondeh. Build a scoring streak and avoid bombs and germs. Play seated or standing, and move only as far as feels comfortable.</p>
             </div>
 
+            <div id="pvpGuide" class="pvp-guide" hidden>
+              <h2>A friendly face-off</h2>
+              <p><strong>Player 1: left of the screen · Player 2: right.</strong> Leave comfortable space between you. Keep your shoulders, arms and hands in view.</p>
+              <p>Catch on your own side with either hand. Both sides get matching treats and hazards. Highest score wins; misses do not end a match.</p>
+              <small>Stay on your starting sides. Camera play waits for both players before starting the clock. Match scores stay separate from the solo leaderboard.</small>
+            </div>
             <div id="setupLeaderboardSlot">
               <section id="leaderboard" class="leaderboard" aria-labelledby="leaderboardTitle">
                 <div class="leaderboard-heading">
@@ -51,10 +57,24 @@
           </div>
 
           <div class="setup-options">
-            <div class="player-name-field">
-              <label for="playerName">Your name <span>(optional)</span></label>
-              <input id="playerName" name="playerName" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Alice" aria-describedby="playerNameHint" />
-              <small id="playerNameHint">Leave blank to play as Guest.</small>
+            <fieldset class="choice-group">
+              <legend>How would you like to play?</legend>
+              <div class="segmented mode-options">
+                <label><input type="radio" name="gameMode" value="solo" checked /><span>Solo</span></label>
+                <label><input type="radio" name="gameMode" value="pvp" /><span>Two players · PvP</span></label>
+              </div>
+            </fieldset>
+            <div class="name-fields">
+              <div class="player-name-field">
+                <label for="playerName"><b id="playerNameLabel">Your name</b> <span>(optional)</span></label>
+                <input id="playerName" name="playerName" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Alice" aria-describedby="playerNameHint" />
+                <small id="playerNameHint">Leave blank to play as Guest.</small>
+              </div>
+              <div id="secondPlayerField" class="player-name-field" hidden>
+                <label for="secondPlayerName">Player 2 · right <span>(optional)</span></label>
+                <input id="secondPlayerName" name="secondPlayerName" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Bob" />
+                <small>Leave blank for Player 2.</small>
+              </div>
             </div>
 
             <fieldset class="choice-group">
@@ -88,6 +108,10 @@
 
         <section id="playPanel" class="play-panel" aria-label="Gentle Catch play area" hidden>
           <div class="game-toolbar">
+            <div id="pvpScoreboard" class="pvp-scoreboard" hidden>
+              <div class="competitor-score player-one"><span id="p1Name">Player 1</span><strong id="p1Score">0</strong><small id="p1Detail">Streak 0 · ×1</small></div>
+              <div class="competitor-score player-two"><span id="p2Name">Player 2</span><strong id="p2Score">0</strong><small id="p2Detail">Streak 0 · ×1</small></div>
+            </div>
             <div class="stat"><span>Score</span><strong id="scoreValue">0</strong></div>
             <div class="stat streak-stat"><span>Streak</span><strong><span id="streakValue">0</span> <small id="multiplierValue">×1</small></strong></div>
             <div class="stat"><span>Caught</span><strong id="caughtValue">0</strong></div>
@@ -102,10 +126,13 @@
           <div id="gameBoard" class="game-board" tabindex="0" aria-describedby="playInstructions">
             <video id="cameraVideo" muted playsinline aria-label="Your mirrored camera view"></video>
             <div class="camera-wash" aria-hidden="true"></div>
+            <div id="pvpLanes" class="pvp-lanes" aria-hidden="true" hidden><span>P1 · LEFT</span><span>P2 · RIGHT</span></div>
             <div id="targets" class="targets" aria-hidden="true"></div>
             <div id="playerCursors" class="player-cursors" aria-hidden="true">
               <div class="player-cursor hand-one" hidden><span></span></div>
               <div class="player-cursor hand-two" hidden><span></span></div>
+              <div class="player-cursor hand-three" hidden><span></span></div>
+              <div class="player-cursor hand-four" hidden><span></span></div>
             </div>
             <div id="trackingStatus" class="tracking-status" hidden>
               <span class="tracking-dot" aria-hidden="true"></span>
@@ -133,6 +160,7 @@
             <button id="playAgain" class="button button-primary" type="button">Play another session</button>
           </div>
           <div id="resultsLeaderboardSlot"></div>
+          <div id="pvpResults" class="pvp-results" hidden></div>
         </section>
       </main>
 

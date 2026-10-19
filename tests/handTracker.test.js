@@ -21,6 +21,26 @@ beforeEach(() => {
 afterEach(() => { tracker.stop(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("camera capture lifecycle", () => {
+  it("releases the single-person worker when switching to PvP", () => {
+    tracker.start();
+    tracker.inFlight = { id: 1, generation: tracker.generation };
+    tracker.configure(2);
+    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(tracker.initialization).toBeNull();
+    expect(tracker.inFlight).toBeNull();
+    tracker.start();
+    expect(tracker.slots).toHaveLength(4);
+  });
+
+  it("presents four person-owned cursors from a two-pose worker result", () => {
+    tracker.options.numPeople = 2;
+    tracker.start();
+    tracker.handleMessage({ type: "RESULT", hands: [], people: [0.75, 0.25].map((x) => ({
+      x, y: 0.4, hands: ["Left", "Right"].map((label) => ({ x, y: 0.5, label, stableSide: true })),
+    })), timestampMs: 1000, generation: tracker.generation, inferenceMs: 30, backend: "CPU" });
+    tracker.presentHands(1050);
+    expect(tracker.onHands.mock.lastCall[0].map((hand) => hand.playerId)).toEqual([0, 0, 1, 1]);
+  });
   it("preserves the camera aspect ratio in inference bitmaps", async () => {
     await tracker.createBitmap();
     expect(createImageBitmap).toHaveBeenCalledWith(video, { resizeWidth: 384, resizeHeight: 288, resizeQuality: "low" });

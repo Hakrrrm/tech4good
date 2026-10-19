@@ -182,7 +182,7 @@ export function updateHandSlots(previousSlots, detections, timestamp) {
 }
 
 export function presentHandSlots(slots, previousPresented, timestamp) {
-  return Array.from({ length: MAX_HANDS }, (_, index) => {
+  return Array.from({ length: Math.max(MAX_HANDS, slots.length) }, (_, index) => {
     const slot = slots[index];
     if (!slot || timestamp - slot.lastSeen > CURSOR_HOLD_MS) return null;
 

@@ -21,6 +21,25 @@ function factory({ gpuMs = 20, cpuMs = 10, failGpu = false, failPose = false } =
 }
 
 describe("tracking backend selection and recovery", () => {
+  it("requires pose tracking for PvP, even when a hands override was requested", async () => {
+    const { engine, create } = factory({ failPose: true });
+    await expect(engine.initialize("hands", null, 2)).rejects.toThrow("Pose unavailable");
+    expect(create.mock.calls.map(([model]) => model)).toEqual(["pose", "pose"]);
+  });
+
+  it("returns both people's own wrists rather than just the first pose", async () => {
+    const { engine, tasks } = factory();
+    await engine.initialize("pose", "CPU", 2);
+    const poses = [0.25, 0.75].map((x) => {
+      const pose = [];
+      for (const index of [11, 12, 15, 16]) pose[index] = { x, y: 0.5, visibility: 0.9 };
+      return pose;
+    });
+    tasks[0].detectForVideo.mockReturnValue({ landmarks: poses });
+    const result = await engine.detect({}, 100);
+    expect(result.people.map((person) => person.x)).toEqual([0.25, 0.75]);
+    expect(result.people.map((person) => person.hands.length)).toEqual([2, 2]);
+  });
   it("measures both warmed backends and closes the slower one", async () => {
     const { engine, tasks } = factory();
     await engine.initialize();

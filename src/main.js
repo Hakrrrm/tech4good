@@ -36,6 +36,11 @@ const elements = {
   playAgain: $("#playAgain"),
   statusLive: $("#statusLive"),
   playerName: $("#playerName"),
+  secondPlayerName: $("#secondPlayerName"),
+  pvpScoreboard: $("#pvpScoreboard"),
+  pvpResults: $("#pvpResults"),
+  resultsTitle: $("#resultsTitle"),
+  competitorStats: [1, 2].map((id) => ({ name: $(`#p${id}Name`), score: $(`#p${id}Score`), detail: $(`#p${id}Detail`) })),
   leaderboard: $("#leaderboard"),
   leaderboardEntries: $("#leaderboardEntries"),
   leaderboardCategory: $("#leaderboardCategory"),
@@ -79,6 +84,10 @@ const state = {
   starting: false,
   playerName: "Guest",
   sessionId: null,
+  pvp: false,
+  competitors: [],
+  awaitingPlayers: false,
+  readySince: null,
 };
 
 const boardSize = { width: 1, height: 1 };
@@ -117,6 +126,7 @@ window.gentleCatchDiagnostics = () => tracker.diagnostics.snapshot();
 let trackingCount = -1;
 
 function updateTrackingStatus(count) {
+  if (state.pvp) return;
   if (count === trackingCount) return;
   trackingCount = count;
   if (count >= 2) {
@@ -133,6 +143,17 @@ function updateTrackingStatus(count) {
 
 function selectedValue(name) {
   return document.querySelector(`input[name="${name}"]:checked`).value;
+}
+
+function renderGameMode() {
+  const pvp = selectedValue("gameMode") === "pvp";
+  $("#secondPlayerField").hidden = !pvp;
+  $("#pvpGuide").hidden = !pvp;
+  elements.setupLeaderboardSlot.hidden = pvp;
+  elements.setup.classList.toggle("pvp-setup", pvp);
+  $("#playerNameLabel").textContent = pvp ? "Player 1 · left" : "Your name";
+  $("#playerNameHint").textContent = pvp ? "Leave blank for Player 1." : "Leave blank to play as Guest.";
+  elements.keyboardStart.textContent = pvp ? "Two-player keyboard" : "Play with keyboard";
 }
 
 function renderLeaderboard(pace, durationSeconds, board = leaderboardStore.list(pace, durationSeconds)) {
@@ -202,11 +223,13 @@ function stopCamera() {
 async function startWithCamera() {
   if (state.starting || state.running) return;
   state.starting = true;
+  document.querySelectorAll("#setupPanel input").forEach((input) => { input.disabled = true; });
   elements.cameraStart.disabled = true;
   elements.keyboardStart.disabled = true;
-  elements.cameraStart.textContent = "Loading hand tracking…";
+  elements.cameraStart.textContent = "Loading movement tracking…";
   elements.cameraMessage.textContent = "Allow camera access, then show your arms and hands while tracking prepares.";
   try {
+    tracker.configure(selectedValue("gameMode") === "pvp" ? 2 : 1);
     const startup = await Promise.allSettled([requestCamera(), tracker.initialize()]);
     const failure = startup.find((result) => result.status === "rejected");
     if (failure) throw failure.reason;
@@ -220,6 +243,7 @@ async function startWithCamera() {
     elements.keyboardStart.focus();
   } finally {
     state.starting = false;
+    document.querySelectorAll("#setupPanel input").forEach((input) => { input.disabled = false; });
     elements.cameraStart.disabled = false;
     elements.keyboardStart.disabled = false;
     elements.cameraStart.innerHTML = '<span aria-hidden="true">◉</span> Use camera &amp; start';
@@ -227,6 +251,14 @@ async function startWithCamera() {
 }
 
 function startSession(mode) {
+  state.pvp = selectedValue("gameMode") === "pvp";
+  state.competitors = [elements.playerName, elements.secondPlayerName].map((input, index) => ({
+    name: input.value.trim() ? normalizePlayerName(input.value) : `Player ${index + 1}`,
+    score: 0, streak: 0, multiplier: 1, bestStreak: 0, caught: 0, missed: 0,
+  }));
+  state.awaitingPlayers = state.pvp && mode === "camera";
+  state.readySince = null;
+  state.keys.clear();
   state.playerName = normalizePlayerName(elements.playerName.value);
   state.sessionId = crypto.randomUUID?.() ?? `${Date.now()}-${performance.now()}-${Math.random().toString(36).slice(2)}`;
   state.running = true;
@@ -247,19 +279,33 @@ function startSession(mode) {
   state.lastSpawn = state.startedAt - getPaceConfig(state.pace).spawnInterval * 0.55;
   state.objects = [];
   state.players = mode === "keyboard" ? [{ x: 0.5, y: 0.72, radius: 44 }] : [];
+  if (state.pvp && mode === "keyboard") {
+    state.players = [{ x: 0.25, y: 0.72, radius: 44, playerId: 0 }, null,
+      { x: 0.75, y: 0.72, radius: 44, playerId: 1 }, null];
+  }
 
   elements.targets.replaceChildren();
   elements.setup.hidden = true;
   elements.results.hidden = true;
   elements.play.hidden = false;
+  elements.play.classList.toggle("pvp-play", state.pvp);
+  elements.pvpScoreboard.hidden = !state.pvp;
+  $("#pvpLanes").hidden = !state.pvp;
+  elements.board.classList.toggle("pvp-board", state.pvp);
+  $("#playInstructions").textContent = state.pvp ? "Your side · your treats · avoid hazards" : "Catch treats · avoid hazards";
+  for (let id = 0; id < 2; id++) setText(elements.competitorStats[id].name, `P${id + 1} · ${state.competitors[id].name}`);
   measureBoard();
   elements.video.hidden = mode !== "camera";
   elements.trackingStatus.hidden = mode !== "camera";
+  trackingCount = -1;
   updateTrackingStatus(0);
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
     ? "Your hands control the circles. Keep your arms in view. Catch fruit and local treats; avoid bombs and germs."
     : "Use the arrow keys or W A S D. Catch fruit and local treats; avoid bombs and germs.";
+  if (state.pvp) elements.inputHint.textContent = mode === "camera"
+    ? "P1: left · P2: right. Stay on your starting sides, with both shoulders visible. Either hand can catch."
+    : "P1 (left): W A S D · P2 (right): arrow keys. Catch on your own side. Highest score wins!";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
   updateStats();
@@ -273,42 +319,61 @@ function startSession(mode) {
 
 function spawnObject(now) {
   const config = getPaceConfig(state.pace);
-  if (state.objects.length >= config.maxObjects || now - state.lastSpawn < config.spawnInterval) return;
+  const full = state.pvp
+    ? [0, 1].some((id) => state.objects.filter((object) => object.playerId === id).length >= config.maxObjects)
+    : state.objects.length >= config.maxObjects;
+  if (full || now - state.lastSpawn < config.spawnInterval) return;
 
   const type = randomObjectType();
-  const object = {
-    id: `${now}-${Math.random()}`,
-    type,
-    x: 0.1 + Math.random() * 0.8,
-    y: -0.08,
-    radius: 30,
-    drift: (Math.random() - 0.5) * 0.025,
-    phase: Math.random() * Math.PI * 2,
-  };
-  const node = document.createElement("div");
-  node.className = `falling-object ${type.kind}`;
-  if (type.icon) {
-    const icon = document.createElement("img");
-    icon.src = type.icon;
-    icon.alt = "";
-    icon.width = 56;
-    icon.height = 56;
-    icon.draggable = false;
-    node.append(icon);
-  } else {
-    node.textContent = type.symbol;
+  const position = Math.random();
+  const drift = (Math.random() - 0.5) * 0.025;
+  const phase = Math.random() * Math.PI * 2;
+  for (const playerId of state.pvp ? [0, 1] : [null]) {
+    const object = {
+      id: `${now}-${playerId}-${Math.random()}`,
+      type,
+      playerId,
+      x: state.pvp ? (playerId === 0 ? 0.08 + position * 0.34 : 0.92 - position * 0.34) : 0.1 + position * 0.8,
+      y: -0.08,
+      radius: 30,
+      drift: playerId === 1 ? -drift : drift,
+      phase,
+    };
+    const node = document.createElement("div");
+    node.className = `falling-object ${type.kind}`;
+    if (type.icon) {
+      const icon = document.createElement("img");
+      icon.src = type.icon;
+      icon.alt = "";
+      icon.width = 56;
+      icon.height = 56;
+      icon.draggable = false;
+      node.append(icon);
+    } else {
+      node.textContent = type.symbol;
+    }
+    node.dataset.id = object.id;
+    if (state.pvp) node.dataset.player = playerId + 1;
+    node.setAttribute("role", "img");
+    node.setAttribute("aria-label", type.label);
+    object.node = node;
+    state.objects.push(object);
+    elements.targets.append(node);
   }
-  node.dataset.id = object.id;
-  node.setAttribute("role", "img");
-  node.setAttribute("aria-label", type.label);
-  object.node = node;
-  state.objects.push(object);
-  elements.targets.append(node);
   state.lastSpawn = now;
 }
 
 function updateKeyboard(deltaSeconds) {
   if (state.mode !== "keyboard") return;
+  if (state.pvp) {
+    for (const [index, keys, minX, maxX] of [[0, ["a", "d", "w", "s"], 0.04, 0.46], [2, ["arrowleft", "arrowright", "arrowup", "arrowdown"], 0.54, 0.96]]) {
+      const player = state.players[index];
+      const speed = 0.52 * deltaSeconds;
+      player.x = clamp(player.x + speed * (Number(state.keys.has(keys[1])) - Number(state.keys.has(keys[0]))), minX, maxX);
+      player.y = clamp(player.y + speed * (Number(state.keys.has(keys[3])) - Number(state.keys.has(keys[2]))), 0.06, 0.94);
+    }
+    return;
+  }
   const player = state.players[0];
   if (!player) return;
   const speed = 0.52 * deltaSeconds;
@@ -330,6 +395,30 @@ function gameLoop(now) {
 
   const deltaSeconds = Math.min((now - state.lastFrame) / 1000, 0.05);
   state.lastFrame = now;
+  if (state.mode === "camera") tracker.presentHands(now);
+  if (state.pvp && state.mode === "camera") {
+    const ready = [0, 1].map((id) => state.players.some((hand) => hand?.playerId === id && hand.interactive !== false));
+    const bothReady = ready.every(Boolean);
+    elements.trackingStatus.classList.toggle("two-hands", bothReady);
+    setText(elements.trackingStatusText, bothReady
+      ? (state.awaitingPlayers ? "Both players ready — hold position…" : "Both players ready")
+      : `${ready[0] ? "P1 ready" : "Show P1 on the left"} · ${ready[1] ? "P2 ready" : "Show P2 on the right"}`);
+    if (state.awaitingPlayers) {
+      if (!bothReady) state.readySince = null;
+      else state.readySince ??= now;
+      if (state.readySince !== null && now - state.readySince >= 700) {
+        state.awaitingPlayers = false;
+        state.startedAt = now;
+        state.pausedDuration = 0;
+        state.lastSpawn = now - getPaceConfig(state.pace).spawnInterval * 0.55;
+        elements.statusLive.textContent = "Both players ready. Match started!";
+      } else {
+        renderCursors();
+        state.animationId = requestAnimationFrame(gameLoop);
+        return;
+      }
+    }
+  }
   state.remainingSeconds = state.durationSeconds - (now - state.startedAt - state.pausedDuration) / 1000;
   if (state.remainingSeconds <= 0) {
     endSession("time");
@@ -337,7 +426,6 @@ function gameLoop(now) {
   }
 
   updateKeyboard(deltaSeconds);
-  if (state.mode === "camera") tracker.presentHands(now);
   spawnObject(now);
   updateObjects(deltaSeconds, now);
   updateStats();
@@ -357,7 +445,8 @@ function updateObjects(deltaSeconds, now) {
     const displayX = clamp(object.x + sway, 0.05, 0.95);
     object.node.style.transform = `translate(${displayX * boardWidth}px, ${object.y * boardHeight}px)`;
 
-    const caught = state.players.some((player) => player && player.interactive !== false && circlesOverlap(
+    const caught = state.players.some((player) => player && player.interactive !== false
+      && (!state.pvp || player.playerId === object.playerId) && circlesOverlap(
       { x: displayX * boardWidth, y: object.y * boardHeight, radius: object.radius },
       { x: player.x * boardWidth, y: player.y * boardHeight, radius: player.radius },
     ));
@@ -376,11 +465,12 @@ function removeObject(object) {
 }
 
 function resolveObject(object) {
-  const result = applyObjectScore(state, object.type);
-  state.score = result.score;
-  state.streak = result.streak;
-  state.multiplier = result.multiplier;
-  state.bestStreak = Math.max(state.bestStreak, state.streak);
+  const scorer = state.pvp ? state.competitors[object.playerId] : state;
+  const result = applyObjectScore(scorer, object.type);
+  scorer.score = result.score;
+  scorer.streak = result.streak;
+  scorer.multiplier = result.multiplier;
+  scorer.bestStreak = Math.max(scorer.bestStreak, scorer.streak);
   object.node.classList.add(object.type.hazard ? "hazard-hit" : "collected");
   setTimeout(() => object.node.remove(), 260);
   state.objects = state.objects.filter((candidate) => candidate.id !== object.id);
@@ -397,16 +487,20 @@ function resolveObject(object) {
     return;
   }
 
-  state.caught += 1;
-  if (state.multiplier > 1) {
-    elements.statusLive.textContent = `${object.type.label} caught for ${result.delta} points. ${state.multiplier} times streak multiplier.`;
-  } else if (state.caught === 1 || state.caught % 5 === 0) {
-    elements.statusLive.textContent = `${state.caught} treats caught.`;
+  scorer.caught += 1;
+  if (scorer.multiplier > 1) {
+    elements.statusLive.textContent = `${object.type.label} caught for ${result.delta} points. ${scorer.multiplier} times streak multiplier.`;
+  } else if (scorer.caught === 1 || scorer.caught % 5 === 0) {
+    elements.statusLive.textContent = `${scorer.caught} ${scorer.caught === 1 ? "treat" : "treats"} caught.`;
   }
 }
 
 function missObject(object) {
   removeObject(object);
+  if (state.pvp) {
+    state.competitors[object.playerId].missed += 1;
+    return;
+  }
   state.missed += 1;
   if (state.missed >= getPaceConfig(state.pace).missLimit) endSession("misses");
 }
@@ -416,11 +510,16 @@ function renderCursors() {
     const player = state.players[index];
     if (cursor.hidden !== !player) cursor.hidden = !player;
     if (!player) return;
+    setText(cursor.firstElementChild, state.pvp ? player.playerId + 1 : "");
     cursor.style.transform = `translate3d(${player.x * boardSize.width}px, ${player.y * boardSize.height}px, 0) translate(-50%, -50%)`;
   });
 }
 
 function updateStats() {
+  if (state.pvp) state.competitors.forEach((player, id) => {
+    setText(elements.competitorStats[id].score, player.score);
+    setText(elements.competitorStats[id].detail, `Streak ${player.streak} · ×${player.multiplier} · Caught ${player.caught}`);
+  });
   const config = getPaceConfig(state.pace);
   setText(elements.score, state.score);
   setText(elements.streak, state.streak);
@@ -441,6 +540,7 @@ function togglePause() {
   if (!state.running) return;
   state.paused = !state.paused;
   if (state.paused) {
+    state.readySince = null;
     state.pausedAt = performance.now();
     if (state.mode === "camera") tracker.stop();
     elements.pause.textContent = "Continue";
@@ -470,6 +570,34 @@ function endSession(reason = "ended") {
 
   elements.play.hidden = true;
   elements.results.hidden = false;
+  elements.pvpResults.hidden = !state.pvp;
+  elements.resultsLeaderboardSlot.hidden = state.pvp;
+  $(".result-stats").hidden = state.pvp;
+  elements.resultsTitle.textContent = "Lovely movement!";
+  if (state.pvp) {
+    const [first, second] = state.competitors;
+    const winner = first.score === second.score ? null : first.score > second.score ? 0 : 1;
+    elements.resultsTitle.textContent = state.awaitingPlayers ? "Match cancelled" : winner === null
+      ? "It's a draw!" : `${state.competitors[winner].name} wins!`;
+    elements.resultMessage.textContent = state.awaitingPlayers
+      ? "Both players need to be visible before the match starts."
+      : `${first.name}: ${first.score} · ${second.name}: ${second.score}. Thanks for playing together!`;
+    elements.pvpResults.replaceChildren(...state.competitors.map((player, id) => {
+      const card = document.createElement("section");
+      card.className = `match-result player-${id === 0 ? "one" : "two"}`;
+      const name = document.createElement("h3");
+      name.textContent = `P${id + 1} · ${player.name}`;
+      const score = document.createElement("strong");
+      score.textContent = `${player.score} points`;
+      const detail = document.createElement("p");
+      detail.textContent = `${player.caught} caught · Best streak ${player.bestStreak} · ${player.missed} missed`;
+      card.append(name, score, detail);
+      return card;
+    }));
+    elements.statusLive.textContent = `${elements.resultsTitle.textContent} ${elements.resultMessage.textContent}`;
+    elements.playAgain.focus({ preventScroll: true });
+    return;
+  }
   elements.finalScore.textContent = state.score;
   elements.finalCaught.textContent = state.caught;
   elements.finalStreak.textContent = state.bestStreak;
@@ -529,6 +657,8 @@ window.addEventListener("storage", () => {
   }
 });
 renderSetupLeaderboard();
+document.querySelectorAll('input[name="gameMode"]').forEach((input) => input.addEventListener("change", renderGameMode));
+renderGameMode();
 window.addEventListener("keydown", handleKeyDown);
 window.addEventListener("keyup", (event) => state.keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => state.keys.clear());
