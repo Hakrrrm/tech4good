@@ -1,4 +1,4 @@
-import { getPalmCenter, getPoseHands } from "./handTrackingMath.js";
+import { getPoseHands } from "./handTrackingMath.js";
 import { getPosePeople } from "./personTracking.js";
 
 export function median(values) {
@@ -23,7 +23,10 @@ export class TrackingEngine {
     this.forcedBackend = forcedBackend;
     this.numPeople = numPeople;
     const errors = [];
-    for (const model of numPeople === 2 ? ["pose"] : preferred === "hands" ? ["hands"] : ["pose", "hands"]) {
+    if (preferred === "hands") {
+      throw new Error("Player calibration needs body pose tracking. Remove ?tracker=hands or use keyboard play.");
+    }
+    for (const model of ["pose"]) {
       for (const backend of forcedBackend ? [forcedBackend] : ["GPU", "CPU"]) {
         try {
           const task = await this.createModel(model, backend);
@@ -98,15 +101,8 @@ export class TrackingEngine {
       detection = this.detectWith(this.selected, bitmap, timestampMs);
     }
 
-    const hands = this.model === "pose"
-      ? getPoseHands(detection.result.landmarks[0] ?? [])
-      : detection.result.landmarks.flatMap((landmarks, index) => {
-          const palm = getPalmCenter(landmarks);
-          if (!palm) return [];
-          const category = detection.result.handedness[index]?.[0];
-          return [{ ...palm, label: category?.categoryName ?? `hand-${index}`, confidence: category?.score ?? 1 }];
-        });
-    const people = this.numPeople === 2 ? getPosePeople(detection.result.landmarks) : [];
+    const hands = getPoseHands(detection.result.landmarks[0] ?? []);
+    const people = getPosePeople(detection.result.landmarks);
     return { hands, people, inferenceMs: detection.inferenceMs, backend: this.selected.backend, model: this.model };
   }
 

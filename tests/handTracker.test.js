@@ -33,13 +33,19 @@ describe("camera capture lifecycle", () => {
   });
 
   it("presents four person-owned cursors from a two-pose worker result", () => {
+    tracker.personTracker.numPeople = 2;
     tracker.options.numPeople = 2;
+    tracker.personTracker.reset();
     tracker.start();
-    tracker.handleMessage({ type: "RESULT", hands: [], people: [0.75, 0.25].map((x) => ({
-      x, y: 0.4, hands: ["Left", "Right"].map((label) => ({ x, y: 0.5, label, stableSide: true })),
-    })), timestampMs: 1000, generation: tracker.generation, inferenceMs: 30, backend: "CPU" });
-    tracker.presentHands(1050);
+    for (let timestampMs = 1000; timestampMs <= 1900; timestampMs += 100) {
+      tracker.handleMessage({ type: "RESULT", hands: [], people: [0.75, 0.25].map((x) => ({
+        x, y: 0.4, shoulderWidth: 0.12, torsoLength: 0.18, handsRaised: true,
+        hands: ["Left", "Right"].map((label) => ({ x, y: 0.5, label, stableSide: true })),
+      })), timestampMs, generation: tracker.generation, inferenceMs: 30, backend: "CPU" });
+    }
+    tracker.presentHands(1950);
     expect(tracker.onHands.mock.lastCall[0].map((hand) => hand.playerId)).toEqual([0, 0, 1, 1]);
+    expect(tracker.getCalibrationStatus(1950).locked).toEqual([true, true]);
   });
   it("preserves the camera aspect ratio in inference bitmaps", async () => {
     await tracker.createBitmap();
@@ -55,7 +61,8 @@ describe("camera capture lifecycle", () => {
     now = 1080;
     tracker.handleMessage({ type: "RESULT", hands: [{ x: 0.2, y: 0.4, label: "Left" }],
       requestId: 1, generation: tracker.generation, timestampMs: 1000, inferenceMs: 60, backend: "CPU" });
-    expect(tracker.slots[0].lastSeen).toBe(1000);
+    expect(tracker.slots).toEqual([null, null]);
+    expect(tracker.getCalibrationStatus(1080).locked).toEqual([false]);
     expect(tracker.diagnostics.snapshot().frameAgeMs.median).toBe(80);
   });
 

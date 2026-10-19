@@ -17,6 +17,10 @@ const elements = {
   cursors: [...document.querySelectorAll(".player-cursor")],
   trackingStatus: $("#trackingStatus"),
   trackingStatusText: $("#trackingStatus strong"),
+  calibrationOverlay: $("#calibrationOverlay"),
+  calibrationInstruction: $("#calibrationInstruction"),
+  calibrationRows: [$("#calibrationP1"), $("#calibrationP2")],
+  calibrationProgress: [$("#calibrationProgress1"), $("#calibrationProgress2")],
   video: $("#cameraVideo"),
   score: $("#scoreValue"),
   streak: $("#streakValue"),
@@ -86,8 +90,9 @@ const state = {
   sessionId: null,
   pvp: false,
   competitors: [],
-  awaitingPlayers: false,
+  awaitingCalibration: false,
   readySince: null,
+  calibrationAnnouncement: "",
 };
 
 const boardSize = { width: 1, height: 1 };
@@ -107,12 +112,12 @@ const tracker = new HandTracker(elements.video, (hands) => {
   }
 }, (status) => {
   if (!state.running || state.mode !== "camera") return;
-  if (status.type === "tracking") updateTrackingStatus(status.count);
   if (status.type === "error") {
-    trackingCount = -1;
-    const message = status.fatal
-      ? "Tracking stopped — end this session and start again."
-      : "Tracking is recovering…";
+    if (status.fatal) {
+      endSession("tracking");
+      return;
+    }
+    const message = "Tracking is recovering…";
     elements.trackingStatusText.textContent = message;
     elements.statusLive.textContent = message;
   }
@@ -123,23 +128,6 @@ const tracker = new HandTracker(elements.video, (hands) => {
 
 // Local, read-only diagnostics: no image data or network/telemetry.
 window.gentleCatchDiagnostics = () => tracker.diagnostics.snapshot();
-let trackingCount = -1;
-
-function updateTrackingStatus(count) {
-  if (state.pvp) return;
-  if (count === trackingCount) return;
-  trackingCount = count;
-  if (count >= 2) {
-    elements.trackingStatus.classList.add("two-hands");
-    elements.trackingStatusText.textContent = "Two hands ready";
-  } else if (count === 1) {
-    elements.trackingStatus.classList.remove("two-hands");
-    elements.trackingStatusText.textContent = "One hand ready — show your other hand to use both";
-  } else {
-    elements.trackingStatus.classList.remove("two-hands");
-    elements.trackingStatusText.textContent = "Show one or both hands to the camera";
-  }
-}
 
 function selectedValue(name) {
   return document.querySelector(`input[name="${name}"]:checked`).value;
@@ -227,7 +215,7 @@ async function startWithCamera() {
   elements.cameraStart.disabled = true;
   elements.keyboardStart.disabled = true;
   elements.cameraStart.textContent = "Loading movement tracking…";
-  elements.cameraMessage.textContent = "Allow camera access, then show your arms and hands while tracking prepares.";
+  elements.cameraMessage.textContent = "Allow camera access, then raise both hands when prompted.";
   try {
     tracker.configure(selectedValue("gameMode") === "pvp" ? 2 : 1);
     const startup = await Promise.allSettled([requestCamera(), tracker.initialize()]);
@@ -256,8 +244,9 @@ function startSession(mode) {
     name: input.value.trim() ? normalizePlayerName(input.value) : `Player ${index + 1}`,
     score: 0, streak: 0, multiplier: 1, bestStreak: 0, caught: 0, missed: 0,
   }));
-  state.awaitingPlayers = state.pvp && mode === "camera";
+  state.awaitingCalibration = mode === "camera";
   state.readySince = null;
+  state.calibrationAnnouncement = "";
   state.keys.clear();
   state.playerName = normalizePlayerName(elements.playerName.value);
   state.sessionId = crypto.randomUUID?.() ?? `${Date.now()}-${performance.now()}-${Math.random().toString(36).slice(2)}`;
@@ -297,14 +286,20 @@ function startSession(mode) {
   measureBoard();
   elements.video.hidden = mode !== "camera";
   elements.trackingStatus.hidden = mode !== "camera";
-  trackingCount = -1;
-  updateTrackingStatus(0);
+  elements.calibrationOverlay.hidden = mode !== "camera";
+  $("#calibrationP2Row").hidden = !state.pvp;
+  elements.calibrationInstruction.textContent = state.pvp
+    ? "One player on each side. Both raise both hands and keep your shoulders in view."
+    : "Keep your shoulders and both hands in view for a moment.";
+  elements.calibrationProgress.forEach((progress) => { progress.value = 0; });
+  elements.calibrationProgress[0].setAttribute("aria-label", state.pvp ? "Player 1 calibration" : "Your calibration");
+  setText(elements.trackingStatusText, "Raise both hands to lock tracking");
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
-    ? "Your hands control the circles. Keep your arms in view. Catch fruit and local treats; avoid bombs and germs."
+    ? "Raise both hands to lock in. Then catch fruit and local treats; avoid bombs and germs."
     : "Use the arrow keys or W A S D. Catch fruit and local treats; avoid bombs and germs.";
   if (state.pvp) elements.inputHint.textContent = mode === "camera"
-    ? "P1: left · P2: right. Stay on your starting sides, with both shoulders visible. Either hand can catch."
+    ? "P1: left · P2: right. Both raise both hands to lock in. Stay on your starting sides."
     : "P1 (left): W A S D · P2 (right): arrow keys. Catch on your own side. Highest score wins!";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
@@ -312,7 +307,7 @@ function startSession(mode) {
   renderCursors();
   elements.play.scrollIntoView({ block: "start" });
   elements.board.focus({ preventScroll: true });
-  elements.statusLive.textContent = "Session started.";
+  elements.statusLive.textContent = state.awaitingCalibration ? "Raise both hands to lock tracking." : "Session started.";
   cancelAnimationFrame(state.animationId);
   state.animationId = requestAnimationFrame(gameLoop);
 }
@@ -396,28 +391,10 @@ function gameLoop(now) {
   const deltaSeconds = Math.min((now - state.lastFrame) / 1000, 0.05);
   state.lastFrame = now;
   if (state.mode === "camera") tracker.presentHands(now);
-  if (state.pvp && state.mode === "camera") {
-    const ready = [0, 1].map((id) => state.players.some((hand) => hand?.playerId === id && hand.interactive !== false));
-    const bothReady = ready.every(Boolean);
-    elements.trackingStatus.classList.toggle("two-hands", bothReady);
-    setText(elements.trackingStatusText, bothReady
-      ? (state.awaitingPlayers ? "Both players ready — hold position…" : "Both players ready")
-      : `${ready[0] ? "P1 ready" : "Show P1 on the left"} · ${ready[1] ? "P2 ready" : "Show P2 on the right"}`);
-    if (state.awaitingPlayers) {
-      if (!bothReady) state.readySince = null;
-      else state.readySince ??= now;
-      if (state.readySince !== null && now - state.readySince >= 700) {
-        state.awaitingPlayers = false;
-        state.startedAt = now;
-        state.pausedDuration = 0;
-        state.lastSpawn = now - getPaceConfig(state.pace).spawnInterval * 0.55;
-        elements.statusLive.textContent = "Both players ready. Match started!";
-      } else {
-        renderCursors();
-        state.animationId = requestAnimationFrame(gameLoop);
-        return;
-      }
-    }
+  if (state.mode === "camera" && !updateCalibration(now)) {
+    renderCursors();
+    state.animationId = requestAnimationFrame(gameLoop);
+    return;
   }
   state.remainingSeconds = state.durationSeconds - (now - state.startedAt - state.pausedDuration) / 1000;
   if (state.remainingSeconds <= 0) {
@@ -431,6 +408,42 @@ function gameLoop(now) {
   updateStats();
   renderCursors();
   state.animationId = requestAnimationFrame(gameLoop);
+}
+
+function updateCalibration(now) {
+  const status = tracker.getCalibrationStatus(now);
+  const count = state.pvp ? 2 : 1;
+  const ready = Array.from({ length: count }, (_, id) => Boolean(status.locked[id] && status.recent[id]));
+  elements.trackingStatus.classList.toggle("two-hands", ready.every(Boolean));
+  const messages = ready.map((isReady, id) => {
+    const label = state.pvp ? `P${id + 1}` : "You";
+    if (status.needsRaise[id]) return `${label}: raise both hands again`;
+    if (isReady) return `${label} ready`;
+    return status.locked[id] ? `${label}: bring a hand into view` : `${label}: raise both hands`;
+  });
+  const announcement = messages.join(" · ");
+  setText(elements.trackingStatusText, announcement);
+  if (announcement !== state.calibrationAnnouncement) {
+    state.calibrationAnnouncement = announcement;
+    elements.statusLive.textContent = announcement;
+  }
+  if (!state.awaitingCalibration) return true;
+  for (let id = 0; id < count; id++) {
+    setText(elements.calibrationRows[id], status.locked[id]
+      ? `${state.pvp ? `Player ${id + 1}` : "You"} locked ✓`
+      : `${state.pvp ? `Player ${id + 1}` : "You"}: raise both hands`);
+    elements.calibrationProgress[id].value = Math.round((status.progress[id] ?? 0) * 100);
+  }
+  if (!ready.every(Boolean)) state.readySince = null;
+  else state.readySince ??= now;
+  if (state.readySince === null || now - state.readySince < 700) return false;
+  state.awaitingCalibration = false;
+  state.startedAt = now;
+  state.pausedDuration = 0;
+  state.lastSpawn = now - getPaceConfig(state.pace).spawnInterval * 0.55;
+  elements.calibrationOverlay.hidden = true;
+  elements.statusLive.textContent = state.pvp ? "Both players locked. Match started!" : "Tracking locked. Session started!";
+  return true;
 }
 
 function updateObjects(deltaSeconds, now) {
@@ -549,7 +562,7 @@ function togglePause() {
   } else {
     state.pausedDuration += performance.now() - state.pausedAt;
     state.lastFrame = performance.now();
-    if (state.mode === "camera") tracker.start();
+    if (state.mode === "camera") tracker.start(true);
     elements.pause.textContent = "Pause";
     elements.pauseOverlay.hidden = true;
     elements.statusLive.textContent = "Session continued.";
@@ -574,13 +587,23 @@ function endSession(reason = "ended") {
   elements.resultsLeaderboardSlot.hidden = state.pvp;
   $(".result-stats").hidden = state.pvp;
   elements.resultsTitle.textContent = "Lovely movement!";
+  if (reason === "tracking") {
+    elements.pvpResults.hidden = true;
+    elements.resultsLeaderboardSlot.hidden = true;
+    $(".result-stats").hidden = true;
+    elements.resultsTitle.textContent = "Camera tracking stopped";
+    elements.resultMessage.textContent = "The camera tracker stopped. Please start another session.";
+    elements.statusLive.textContent = elements.resultMessage.textContent;
+    elements.playAgain.focus({ preventScroll: true });
+    return;
+  }
   if (state.pvp) {
     const [first, second] = state.competitors;
     const winner = first.score === second.score ? null : first.score > second.score ? 0 : 1;
-    elements.resultsTitle.textContent = state.awaitingPlayers ? "Match cancelled" : winner === null
+    elements.resultsTitle.textContent = state.awaitingCalibration ? "Match cancelled" : winner === null
       ? "It's a draw!" : `${state.competitors[winner].name} wins!`;
-    elements.resultMessage.textContent = state.awaitingPlayers
-      ? "Both players need to be visible before the match starts."
+    elements.resultMessage.textContent = state.awaitingCalibration
+      ? "Both players need to raise both hands before the match starts."
       : `${first.name}: ${first.score} · ${second.name}: ${second.score}. Thanks for playing together!`;
     elements.pvpResults.replaceChildren(...state.competitors.map((player, id) => {
       const card = document.createElement("section");
@@ -595,6 +618,15 @@ function endSession(reason = "ended") {
       return card;
     }));
     elements.statusLive.textContent = `${elements.resultsTitle.textContent} ${elements.resultMessage.textContent}`;
+    elements.playAgain.focus({ preventScroll: true });
+    return;
+  }
+  if (state.awaitingCalibration) {
+    elements.resultsTitle.textContent = "Session cancelled";
+    elements.resultMessage.textContent = "Raise both hands to start camera play.";
+    elements.resultsLeaderboardSlot.append(elements.leaderboard);
+    renderLeaderboard(state.pace, state.durationSeconds);
+    elements.statusLive.textContent = "Session cancelled before tracking locked.";
     elements.playAgain.focus({ preventScroll: true });
     return;
   }

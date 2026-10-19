@@ -21,10 +21,11 @@ function factory({ gpuMs = 20, cpuMs = 10, failGpu = false, failPose = false } =
 }
 
 describe("tracking backend selection and recovery", () => {
-  it("requires pose tracking for PvP, even when a hands override was requested", async () => {
-    const { engine, create } = factory({ failPose: true });
-    await expect(engine.initialize("hands", null, 2)).rejects.toThrow("Pose unavailable");
-    expect(create.mock.calls.map(([model]) => model)).toEqual(["pose", "pose"]);
+  it("requires pose tracking for calibrated camera play in either mode", async () => {
+    const { engine, create } = factory();
+    await expect(engine.initialize("hands", null, 1)).rejects.toThrow("Player calibration needs body pose");
+    await expect(engine.initialize("hands", null, 2)).rejects.toThrow("Player calibration needs body pose");
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("returns both people's own wrists rather than just the first pose", async () => {
@@ -67,17 +68,16 @@ describe("tracking backend selection and recovery", () => {
     expect(engine.calibrate({}, 100).backend).toBe("CPU");
   });
 
-  it("falls back to the bundled hand model when pose initialization fails", async () => {
+  it("does not start uncalibrated tracking when pose initialization fails", async () => {
     const { engine } = factory({ failPose: true });
-    expect((await engine.initialize()).model).toBe("hands");
-    expect(engine.calibrate({}, 100).model).toBe("hands");
+    await expect(engine.initialize()).rejects.toThrow("Pose unavailable");
   });
 
   it("honors a forced backend for reproducible hardware comparisons", async () => {
     const { engine, create } = factory();
-    await engine.initialize("hands", "CPU");
+    await engine.initialize("pose", "CPU");
     engine.calibrate({}, 100);
-    expect(create).toHaveBeenCalledExactlyOnceWith("hands", "CPU");
+    expect(create).toHaveBeenCalledExactlyOnceWith("pose", "CPU");
   });
 
   it("rejects a backend that initializes but fails during calibration", async () => {

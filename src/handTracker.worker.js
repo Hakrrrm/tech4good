@@ -28,7 +28,7 @@ self.addEventListener("message", async ({ data: message }) => {
         const fileset = { ...vision, wasmLoaderPath: loaderUrl.href };
         return model === "pose"
           ? PoseLandmarker.createFromOptions(fileset, {
-              ...common, numPoses: message.numPeople === 2 ? 2 : 1, outputSegmentationMasks: false,
+              ...common, numPoses: message.numPeople === 2 ? 4 : 2, outputSegmentationMasks: false,
               minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5,
             })
           : HandLandmarker.createFromOptions(fileset, {

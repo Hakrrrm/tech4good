@@ -6,12 +6,17 @@ import { LEADERBOARD_KEY } from "../src/leaderboard.js";
 const mocks = vi.hoisted(() => ({ trackers: [] }));
 vi.mock("../src/handTracker.js", () => ({
   HandTracker: class {
-    constructor(video, onHands) {
+    constructor(video, onHands, onStatus) {
       this.onHands = onHands;
+      this.onStatus = onStatus;
       this.hands = [];
+      this.numPeople = 1;
+      this.calibration = {
+        locked: [false], progress: [0], active: [false], recent: [false], needsRaise: [false],
+      };
       this.diagnostics = { snapshot: () => ({}) };
       this.initialize = vi.fn(async () => {});
-      this.configure = vi.fn();
+      this.configure = vi.fn((numPeople) => { this.numPeople = numPeople; });
       this.warmUp = vi.fn(async () => {});
       this.start = vi.fn();
       this.stop = vi.fn(() => onHands([]));
@@ -19,6 +24,7 @@ vi.mock("../src/handTracker.js", () => ({
       mocks.trackers.push(this);
     }
     presentHands() { this.onHands(this.hands); }
+    getCalibrationStatus() { return this.calibration; }
   },
 }));
 
@@ -74,10 +80,26 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function startCamera() {
+async function startCamera({ calibrate = true } = {}) {
   click("#cameraStart");
   await vi.waitFor(() => expect($("#playPanel").hidden).toBe(false));
-  return mocks.trackers[0];
+  const tracker = mocks.trackers[0];
+  if (calibrate) {
+    tracker.calibration = {
+      locked: Array(tracker.numPeople).fill(true),
+      progress: Array(tracker.numPeople).fill(1),
+      active: Array(tracker.numPeople).fill(true),
+      recent: Array(tracker.numPeople).fill(true),
+      needsRaise: Array(tracker.numPeople).fill(false),
+    };
+    tracker.hands = Array.from({ length: tracker.numPeople }, (_, playerId) => ({
+      x: tracker.numPeople === 1 ? 0.5 : playerId ? 0.75 : 0.25,
+      y: 0.04, playerId, interactive: true,
+    }));
+    advance(16);
+    advance(700);
+  }
+  return tracker;
 }
 
 function selectPvP() {
@@ -95,15 +117,37 @@ async function startPvPCamera() {
     { x: 0.75, y: 0.04, playerId: 1, interactive: true },
     { x: 0.75, y: 0.04, playerId: 1, interactive: true },
   ];
-  advance(16);
-  advance(700);
   return tracker;
 }
 
 describe("PvP sessions", () => {
+  it("shows calibration for both players until each has locked and starts the clock afterward", async () => {
+    selectPvP();
+    const tracker = await startCamera({ calibrate: false });
+    expect($("#calibrationP2Row").hidden).toBe(false);
+    tracker.calibration = {
+      locked: [true, false], progress: [1, 0.5], active: [true, false], recent: [true, false], needsRaise: [false, false],
+    };
+    tracker.hands = [{ x: 0.25, y: 0.04, playerId: 0, interactive: true }];
+    advance(5000);
+    expect($("#calibrationOverlay").hidden).toBe(false);
+    expect($("#calibrationP1").textContent).toContain("locked");
+    expect($("#calibrationProgress2").value).toBe(50);
+    expect($("#timeValue").textContent).toBe("0:30");
+    tracker.calibration.locked[1] = true;
+    tracker.calibration.progress[1] = 1;
+    tracker.calibration.recent[1] = true;
+    tracker.hands.push({ x: 0.75, y: 0.04, playerId: 1, interactive: true });
+    advance(16);
+    advance(700);
+    expect($("#calibrationOverlay").hidden).toBe(true);
+    advance(1000);
+    expect($("#timeValue").textContent).toBe("0:29");
+  });
+
   it("waits for both people without consuming match time or spawning treats", async () => {
     selectPvP();
-    const tracker = await startCamera();
+    const tracker = await startCamera({ calibrate: false });
     tracker.hands = [{ x: 0.25, y: 0.04, playerId: 0, interactive: true }];
     advance(60000);
     expect($("#timeValue").textContent).toBe("0:30");
@@ -200,6 +244,47 @@ describe("PvP sessions", () => {
 });
 
 describe("game session regression", () => {
+  it("ends a camera session cleanly if calibration tracking fails", async () => {
+    const tracker = await startCamera({ calibrate: false });
+    tracker.onStatus({ type: "error", fatal: true });
+    expect($("#resultsTitle").textContent).toBe("Camera tracking stopped");
+    expect(stopTrack).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
+  });
+  it("calibrates solo camera play and does not save a cancelled setup", async () => {
+    const tracker = await startCamera({ calibrate: false });
+    expect($("#calibrationP2Row").hidden).toBe(true);
+    tracker.hands = [{ x: 0.5, y: 0.04, playerId: 0, interactive: true }];
+    advance(60000);
+    expect($("#calibrationOverlay").hidden).toBe(false);
+    expect($("#timeValue").textContent).toBe("0:30");
+    expect($("#targets").children).toHaveLength(0);
+    click("#endButton");
+    expect($("#resultsTitle").textContent).toBe("Session cancelled");
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
+    click("#playAgain");
+    const again = await startCamera({ calibrate: false });
+    again.calibration = { locked: [true], progress: [1], active: [true], recent: [true], needsRaise: [false] };
+    again.hands = [{ x: 0.5, y: 0.04, playerId: 0, interactive: true }];
+    advance(16);
+    advance(700);
+    expect($("#calibrationOverlay").hidden).toBe(true);
+    advance(1000);
+    expect($("#timeValue").textContent).toBe("0:29");
+  });
+
+  it("can start after a confirmed pose lock despite sparse cursor updates", async () => {
+    const tracker = await startCamera({ calibrate: false });
+    tracker.calibration = {
+      locked: [true], progress: [1], active: [true], recent: [true], needsRaise: [false],
+    };
+    tracker.hands = [];
+    advance(16);
+    advance(700);
+    expect($("#calibrationOverlay").hidden).toBe(true);
+    expect($("#timeValue").textContent).toBe("0:30");
+  });
+
   it.each([
     [0, "mandarin", "mandarin orange"],
     [0.21, "watermelon", "watermelon"],
@@ -473,6 +558,14 @@ describe("game session regression", () => {
     expect($("#playPanel").hidden).toBe(true);
     finishWarmup();
     await vi.waitFor(() => expect($("#playPanel").hidden).toBe(false));
+    expect($("#calibrationOverlay").hidden).toBe(false);
+    mocks.trackers[0].calibration = {
+      locked: [true], progress: [1], active: [true], recent: [true], needsRaise: [false],
+    };
+    mocks.trackers[0].hands = [{ x: 0.5, y: 0.04, playerId: 0, interactive: true }];
+    advance(16);
+    advance(700);
+    expect($("#calibrationOverlay").hidden).toBe(true);
     expect($("#timeValue").textContent).toBe("0:30");
     advance(29999);
     expect($("#resultsPanel").hidden).toBe(true);

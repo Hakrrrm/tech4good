@@ -397,6 +397,18 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
 .tracking-status strong { font-size: 0.9rem; line-height: 1.25; }
 .tracking-dot { width: 0.72rem; height: 0.72rem; flex: 0 0 auto; border-radius: 50%; background: var(--gold); }
 .tracking-status.two-hands .tracking-dot { background: #77d29e; }
+.calibration-overlay { position: absolute; z-index: 8; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(23,49,44,0.2); pointer-events: none; }
+.calibration-card { width: min(29rem, 100%); max-height: 100%; padding: clamp(1rem, 3vh, 2rem); border: 3px solid white; border-radius: 1.4rem; color: var(--ink); background: rgba(255,250,240,0.94); box-shadow: var(--shadow); text-align: center; }
+.calibration-card h2 { font-size: clamp(1.7rem, 3vw, 2.7rem); }
+.calibration-card p { margin: 0.65rem 0; }
+.calibration-card small { color: var(--muted); }
+.calibration-players { display: grid; gap: 0.65rem; margin: 1rem 0; text-align: left; }
+.calibration-players > div { display: grid; gap: 0.25rem; }
+.calibration-players progress { width: 100%; height: 0.8rem; overflow: hidden; border: 0; border-radius: 1rem; accent-color: var(--coral); background: #dfe8df; }
+.calibration-players progress::-webkit-progress-bar { background: #dfe8df; }
+.calibration-players progress::-webkit-progress-value { border-radius: 1rem; background: var(--coral); }
+#calibrationP2Row progress { accent-color: #317d97; }
+#calibrationP2Row progress::-webkit-progress-value { background: #317d97; }
 .board-hint { position: absolute; z-index: 2; left: 1rem; bottom: 0.7rem; margin: 0; padding: 0.45rem 0.7rem; border-radius: 0.55rem; color: white; background: rgba(23, 63, 54, 0.78); font-weight: 700; }
 .input-hint { margin: 0.45rem 0 0; color: var(--muted); font-size: 0.95rem; line-height: 1.25; text-align: center; }
 .pause-overlay { position: absolute; z-index: 10; inset: 0; display: grid; place-items: center; background: rgba(23,63,54,0.72); backdrop-filter: blur(5px); }

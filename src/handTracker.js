@@ -1,4 +1,4 @@
-import { presentHandSlots, updateHandSlots } from "./handTrackingMath.js";
+import { presentHandSlots } from "./handTrackingMath.js";
 import { TrackingDiagnostics } from "./trackingDiagnostics.js";
 import { clamp } from "./gameLogic.js";
 import { PersonTracker, updatePersonHandSlots } from "./personTracking.js";
@@ -9,7 +9,7 @@ export class HandTracker {
     this.onHands = onHands;
     this.onStatus = onStatus;
     this.options = options;
-    this.personTracker = new PersonTracker();
+    this.personTracker = new PersonTracker(options.numPeople ?? 1);
     this.worker = null;
     this.initialization = null;
     this.preparation = null;
@@ -68,7 +68,11 @@ export class HandTracker {
     this.averageProcessingMs = 0;
     this.diagnostics = new TrackingDiagnostics();
     this.options.numPeople = numPeople;
-    this.personTracker.reset();
+    this.personTracker = new PersonTracker(numPeople);
+  }
+
+  getCalibrationStatus(timestampMs = performance.now()) {
+    return this.personTracker.status(timestampMs);
   }
 
   handleWorkerError(error) {
@@ -150,16 +154,12 @@ export class HandTracker {
       }
       const now = performance.now();
       const frameAgeMs = Math.max(0, now - message.timestampMs);
-      const people = this.options.numPeople === 2
-        ? this.personTracker.update(message.people ?? [], message.timestampMs) : [];
-      this.slots = this.options.numPeople === 2
-        ? updatePersonHandSlots(this.slots, people, message.timestampMs)
-        : updateHandSlots(this.slots, message.hands, message.timestampMs);
+      const people = this.personTracker.update(message.people ?? [], message.timestampMs);
+      this.slots = updatePersonHandSlots(this.slots, people, message.timestampMs);
       this.averageProcessingMs = this.averageProcessingMs
         ? this.averageProcessingMs * 0.85 + frameAgeMs * 0.15 : frameAgeMs;
       this.captureIntervalMs = clamp(this.averageProcessingMs * 1.1, 1000 / 30, 1000 / 15);
-      const handCount = this.options.numPeople === 2
-        ? people.reduce((sum, person) => sum + (person?.hands.length ?? 0), 0) : message.hands.length;
+      const handCount = people.reduce((sum, person) => sum + (person?.hands.length ?? 0), 0);
       this.diagnostics.frames += 1;
       this.diagnostics.detections += handCount;
       if (!handCount) this.diagnostics.dropouts += 1;
@@ -168,18 +168,20 @@ export class HandTracker {
       this.diagnostics.record("frameAgeMs", frameAgeMs);
       this.onStatus({ type: "tracking", count: handCount,
         people: people.map((person) => Boolean(person?.hands.length)),
+        calibration: this.getCalibrationStatus(message.timestampMs),
         timestampMs: message.timestampMs, inferenceMs: message.inferenceMs, backend: message.backend });
     }
   }
 
-  start() {
+  start(preserveCalibration = false) {
     if (this.running) return;
     this.generation += 1;
     this.running = true;
     this.lastVideoTime = -1;
     this.slots = Array(this.options.numPeople === 2 ? 4 : 2).fill(null);
     this.presentedSlots = [...this.slots];
-    this.personTracker.reset();
+    if (preserveCalibration) this.personTracker.invalidate();
+    else this.personTracker.reset();
     this.lastCaptureTime = -Infinity;
     this.lastPresentationTime = performance.now();
     this.scheduleFrame();
@@ -196,6 +198,7 @@ export class HandTracker {
     this.captureAnimationId = null;
     this.slots = [null, null];
     this.presentedSlots = [null, null];
+    this.personTracker.invalidate();
     this.onHands([]);
   }
 

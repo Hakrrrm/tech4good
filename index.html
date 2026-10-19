@@ -34,8 +34,8 @@
             <div id="pvpGuide" class="pvp-guide" hidden>
               <h2>A friendly face-off</h2>
               <p><strong>Player 1: left of the screen · Player 2: right.</strong> Leave comfortable space between you. Keep your shoulders, arms and hands in view.</p>
-              <p>Catch on your own side with either hand. Both sides get matching treats and hazards. Highest score wins; misses do not end a match.</p>
-              <small>Stay on your starting sides. Camera play waits for both players before starting the clock. Match scores stay separate from the solo leaderboard.</small>
+              <p>Each player raises both hands for a moment to lock in. Then catch on your own side with either hand. Both sides get matching treats and hazards.</p>
+              <small>Stay on your starting sides. Camera play starts after both players lock in. Highest score wins; misses do not end a match.</small>
             </div>
             <div id="setupLeaderboardSlot">
               <section id="leaderboard" class="leaderboard" aria-labelledby="leaderboardTitle">
@@ -137,6 +137,17 @@
             <div id="trackingStatus" class="tracking-status" hidden>
               <span class="tracking-dot" aria-hidden="true"></span>
               <strong>Looking for your hands</strong>
+            </div>
+            <div id="calibrationOverlay" class="calibration-overlay" hidden>
+              <div class="calibration-card" role="group" aria-labelledby="calibrationTitle">
+                <h2 id="calibrationTitle">Raise both hands</h2>
+                <p id="calibrationInstruction">Keep your shoulders and both hands in view for a moment.</p>
+                <div id="calibrationPlayers" class="calibration-players">
+                  <div><strong id="calibrationP1">Looking for you</strong><progress id="calibrationProgress1" max="100" value="0" aria-label="Player 1 calibration"></progress></div>
+                  <div id="calibrationP2Row"><strong id="calibrationP2">Looking for Player 2</strong><progress id="calibrationProgress2" max="100" value="0" aria-label="Player 2 calibration"></progress></div>
+                </div>
+                <small>The timer begins after tracking locks.</small>
+              </div>
             </div>
             <div id="pauseOverlay" class="pause-overlay" hidden>
               <div><span aria-hidden="true">Ⅱ</span><strong>Taking a pause</strong><small>Continue whenever you are ready.</small></div>
