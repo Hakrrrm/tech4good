@@ -152,6 +152,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 4
 .leaderboard-score { display: inline-block; width: 5rem; color: var(--forest); text-align: right; vertical-align: middle; overflow-wrap: anywhere; }
 .leaderboard-empty { margin: 0.8rem 0; color: var(--muted); }
 .leaderboard-storage { margin: 0.65rem 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.3; }
+.leaderboard-pagination { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.6rem; }
+.leaderboard-arrow { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 50%; color: var(--forest); background: var(--cream); font-size: 1.5rem; line-height: 1; }
+.leaderboard-arrow:hover { background: #edf5ed; border-color: var(--forest); }
+.leaderboard-duration { min-width: 3rem; color: var(--forest); font-size: 0.8rem; font-weight: 800; text-align: center; }
 .eyebrow { margin: 0 0 0.75rem; color: var(--coral); font-size: 0.9rem; font-weight: 900; letter-spacing: 0.11em; text-transform: uppercase; }
 h1, h2 { margin: 0; color: var(--forest); font-family: Georgia, "Times New Roman", serif; line-height: 1.03; }
 h1 { font-size: clamp(2.5rem, min(5vw, 6vh), 5.2rem); max-width: 14ch; letter-spacing: -0.045em; }
@@ -452,6 +456,8 @@ footer p { margin: 0; }
 }
 
 @media (max-height: 760px) {
+  .leaderboard-entry { padding-block: 0.22rem; }
+  .leaderboard-pagination { margin-top: 0.35rem; }
   .site-header { padding-block: 0.4rem; }
   .brand { font-size: 1.05rem; }
   .brand-mark { width: 2.2rem; height: 2.2rem; font-size: 1.45rem; }

@@ -41,6 +41,11 @@
                 <ol id="leaderboardEntries" class="leaderboard-entries" aria-label="Highest scores"></ol>
                 <p id="leaderboardEmpty" class="leaderboard-empty">No scores yet. Enjoy the first session!</p>
                 <p id="leaderboardStorage" class="leaderboard-storage" role="status">Names and scores stay in this browser on this device.</p>
+                <div class="leaderboard-pagination" role="group" aria-label="Leaderboard session length">
+                  <button id="leaderboardPrevious" class="leaderboard-arrow" type="button" aria-label="Previous leaderboard duration" aria-controls="leaderboardEntries" title="Previous session length"><span aria-hidden="true">‹</span></button>
+                  <span id="leaderboardDuration" class="leaderboard-duration" aria-live="polite" aria-atomic="true">30s</span>
+                  <button id="leaderboardNext" class="leaderboard-arrow" type="button" aria-label="Next leaderboard duration" aria-controls="leaderboardEntries" title="Next session length"><span aria-hidden="true">›</span></button>
+                </div>
               </section>
             </div>
           </div>

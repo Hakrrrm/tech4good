@@ -80,6 +80,62 @@ async function startCamera() {
 }
 
 describe("game session regression", () => {
+  it("cycles leaderboard durations in both directions without changing game settings or stored scores", () => {
+    const entries = [20, 30, 60].map((durationSeconds) => ({
+      id: `duration-${durationSeconds}`, name: `Player ${durationSeconds}`, score: durationSeconds,
+      pace: "gentle", durationSeconds, mode: "keyboard", endedAt: 1000,
+    }));
+    const saved = JSON.stringify({ version: 1, entries });
+    localStorage.setItem(LEADERBOARD_KEY, saved);
+    window.dispatchEvent(new StorageEvent("storage", { key: LEADERBOARD_KEY }));
+    expect($(".leaderboard-player strong").textContent).toBe("Player 30");
+    click("#leaderboardPrevious");
+    expect($("#leaderboardDuration").textContent).toBe("20s");
+    expect($(".leaderboard-player strong").textContent).toBe("Player 20");
+    click("#leaderboardPrevious");
+    expect($("#leaderboardDuration").textContent).toBe("1 min");
+    expect($(".leaderboard-player strong").textContent).toBe("Player 60");
+    click("#leaderboardNext");
+    expect($("#leaderboardDuration").textContent).toBe("20s");
+    click("#leaderboardNext");
+    expect($("#leaderboardDuration").textContent).toBe("30s");
+    click("#leaderboardNext");
+    expect($("#leaderboardDuration").textContent).toBe("1 min");
+    expect($('input[name="duration"]:checked').value).toBe("30");
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBe(saved);
+    click("#keyboardStart");
+    expect($("#timeValue").textContent).toBe("0:30");
+  });
+
+  it("preserves the browsed view on storage updates and uses the selected pace", () => {
+    const pace = $('input[name="pace"][value="steady"]');
+    pace.checked = true;
+    pace.dispatchEvent(new Event("change", { bubbles: true }));
+    click("#leaderboardNext");
+    expect($("#leaderboardCategory").textContent).toBe("Steady · 1 min");
+    expect($("#leaderboardEmpty").hidden).toBe(false);
+    window.dispatchEvent(new StorageEvent("storage", { key: LEADERBOARD_KEY }));
+    expect($("#leaderboardCategory").textContent).toBe("Steady · 1 min");
+    const duration = $('input[name="duration"][value="20"]');
+    duration.checked = true;
+    duration.dispatchEvent(new Event("change", { bubbles: true }));
+    expect($("#leaderboardDuration").textContent).toBe("20s");
+  });
+
+  it("shows the completed session's board and supports browsing from results without saving duplicate scores", () => {
+    click("#leaderboardNext");
+    click("#keyboardStart");
+    click("#endButton");
+    expect($("#leaderboardDuration").textContent).toBe("30s");
+    click("#leaderboardNext");
+    expect($("#leaderboardCategory").textContent).toBe("Gentle · 1 min");
+    expect($("#leaderboardEmpty").hidden).toBe(false);
+    expect(JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries).toHaveLength(1);
+    click("#playAgain");
+    expect($("#leaderboardDuration").textContent).toBe("30s");
+    expect($("#leaderboardEmpty").hidden).toBe(true);
+  });
+
   it("saves the entered name and final score once, then restores them after an app reload", async () => {
     $("#playerName").value = "  Alice   Tan  ";
     const tracker = await startCamera();

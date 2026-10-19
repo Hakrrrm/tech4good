@@ -41,12 +41,17 @@ const elements = {
   leaderboardCategory: $("#leaderboardCategory"),
   leaderboardEmpty: $("#leaderboardEmpty"),
   leaderboardStorage: $("#leaderboardStorage"),
+  leaderboardPrevious: $("#leaderboardPrevious"),
+  leaderboardNext: $("#leaderboardNext"),
+  leaderboardDuration: $("#leaderboardDuration"),
   setupLeaderboardSlot: $("#setupLeaderboardSlot"),
   resultsLeaderboardSlot: $("#resultsLeaderboardSlot"),
 };
 
 const leaderboardStore = createLeaderboardStore();
 const paceLabels = { gentle: "Gentle", steady: "Steady", lively: "Lively" };
+const leaderboardDurations = [20, 30, 60];
+const leaderboardView = { pace: "gentle", durationSeconds: 30 };
 
 const state = {
   running: false,
@@ -131,6 +136,9 @@ function selectedValue(name) {
 }
 
 function renderLeaderboard(pace, durationSeconds, board = leaderboardStore.list(pace, durationSeconds)) {
+  leaderboardView.pace = pace;
+  leaderboardView.durationSeconds = durationSeconds;
+  elements.leaderboardDuration.textContent = durationSeconds === 60 ? "1 min" : `${durationSeconds}s`;
   elements.leaderboardCategory.textContent = `${paceLabels[pace]} · ${durationSeconds === 60 ? "1 min" : `${durationSeconds} sec`}`;
   elements.leaderboardEntries.replaceChildren(...board.entries.map((entry) => {
     const row = document.createElement("li");
@@ -158,6 +166,12 @@ function renderLeaderboard(pace, durationSeconds, board = leaderboardStore.list(
 
 function renderSetupLeaderboard() {
   renderLeaderboard(selectedValue("pace"), Number(selectedValue("duration")));
+}
+
+function browseLeaderboard(direction) {
+  const index = leaderboardDurations.indexOf(leaderboardView.durationSeconds);
+  const nextIndex = (index + direction + leaderboardDurations.length) % leaderboardDurations.length;
+  renderLeaderboard(leaderboardView.pace, leaderboardDurations[nextIndex]);
 }
 
 async function requestCamera() {
@@ -494,13 +508,14 @@ elements.keyboardStart.addEventListener("click", () => startSession("keyboard"))
 elements.pause.addEventListener("click", togglePause);
 elements.end.addEventListener("click", () => endSession("ended"));
 elements.playAgain.addEventListener("click", resetToSetup);
+elements.leaderboardPrevious.addEventListener("click", () => browseLeaderboard(-1));
+elements.leaderboardNext.addEventListener("click", () => browseLeaderboard(1));
 document.querySelectorAll('input[name="pace"], input[name="duration"]').forEach((input) => {
   input.addEventListener("change", renderSetupLeaderboard);
 });
 window.addEventListener("storage", () => {
   if (!state.running) {
-    if (elements.results.hidden) renderSetupLeaderboard();
-    else renderLeaderboard(state.pace, state.durationSeconds);
+    renderLeaderboard(leaderboardView.pace, leaderboardView.durationSeconds);
   }
 });
 renderSetupLeaderboard();
