@@ -7,6 +7,8 @@ import {
   getPaceConfig,
   getStreakMultiplier,
   randomObjectType,
+  OBJECT_TYPES,
+  HAZARD_TYPES,
 } from "../src/gameLogic.js";
 import {
   filterHandPosition,
@@ -37,10 +39,18 @@ describe("game helpers", () => {
 
   it("provides safe defaults and deterministic object selection", () => {
     expect(getPaceConfig("unknown")).toEqual(getPaceConfig("gentle"));
-    expect(randomObjectType(() => 0).kind).toBe("leaf");
-    expect(randomObjectType(() => 0.8).kind).toBe("star");
+    expect(randomObjectType(() => 0).kind).toBe("mandarin");
+    expect(randomObjectType(() => 0.8).kind).toBe("ondeh-ondeh");
     expect(randomObjectType(() => 0.85).kind).toBe("bomb");
     expect(randomObjectType(() => 0.99).kind).toBe("virus");
+  });
+
+  it("uses local fruit and Singapore treat icons without changing point tiers or hazard deductions", () => {
+    expect(OBJECT_TYPES.map((type) => type.kind)).toEqual(["mandarin", "watermelon", "icing-gem", "ondeh-ondeh"]);
+    expect(OBJECT_TYPES.map((type) => type.points)).toEqual([10, 15, 20, 25]);
+    expect(OBJECT_TYPES.every((type) => type.icon && !/^https?:/.test(type.icon) && !type.hazard)).toBe(true);
+    expect(HAZARD_TYPES.map((type) => type.points)).toEqual([-25, -15]);
+    expect([0, 0.21, 0.42, 0.62].map((roll) => randomObjectType(() => roll))).toEqual(OBJECT_TYPES);
   });
 
   it("builds a capped streak multiplier and resets it on hazards", () => {

@@ -1,6 +1,6 @@
 # Gentle Catch
 
-Gentle Catch is a calm, camera-controlled movement game designed with older adults in mind. Leaves, flowers, hearts, and stars drift down the screen; players collect them with one or both hands while avoiding bombs and germs. Consecutive catches build a score multiplier, while touching a hazard deducts points and resets the streak. It uses its own name, visual language, rules, and artwork.
+Gentle Catch is a calm, camera-controlled movement game designed with older adults in mind. Mandarin oranges, watermelon slices, icing gem biscuits (the colourful sugar-swirl biscuits), and ondeh-ondeh drift down the screen; players collect them with one or both hands while avoiding bombs and germs. These original, locally bundled SVG icons look consistent across laptops and Raspberry Pi and require no internet downloads. The four collectible point tiers remain 10, 15, 20 and 25. Consecutive catches build a score multiplier, while touching a hazard deducts points and resets the streak. It uses its own name, visual language, rules, and artwork.
 
 ## Why it runs well on a Raspberry Pi
 

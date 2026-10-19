@@ -293,10 +293,7 @@ legend { margin-bottom: 0.75rem; color: var(--forest); font-size: 1.05rem; font-
   font-size: 2.35rem;
   will-change: transform;
 }
-.falling-object.leaf { color: #2f805c; }
-.falling-object.flower { color: #d96774; }
-.falling-object.heart { color: #de6257; }
-.falling-object.star { color: #e3a823; }
+.falling-object img { display: block; width: 88%; height: 88%; object-fit: contain; pointer-events: none; user-select: none; }
 .falling-object.bomb {
   color: white;
   background: #4a3938;

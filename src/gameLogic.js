@@ -1,3 +1,8 @@
+import mandarinIcon from "./assets/mandarin.svg";
+import watermelonIcon from "./assets/watermelon.svg";
+import icingGemIcon from "./assets/icing-gem.svg";
+import ondehOndehIcon from "./assets/ondeh-ondeh.svg";
+
 export const PACE_CONFIG = Object.freeze({
   gentle: { fallSpeed: 42, spawnInterval: 1800, maxObjects: 3, missLimit: 10 },
   steady: { fallSpeed: 58, spawnInterval: 1350, maxObjects: 4, missLimit: 8 },
@@ -5,10 +10,10 @@ export const PACE_CONFIG = Object.freeze({
 });
 
 export const OBJECT_TYPES = Object.freeze([
-  { kind: "leaf", symbol: "🍃", label: "leaf", points: 10, hazard: false },
-  { kind: "flower", symbol: "✿", label: "flower", points: 15, hazard: false },
-  { kind: "heart", symbol: "♥", label: "heart", points: 20, hazard: false },
-  { kind: "star", symbol: "★", label: "star", points: 25, hazard: false },
+  { kind: "mandarin", icon: mandarinIcon, label: "mandarin orange", points: 10, hazard: false },
+  { kind: "watermelon", icon: watermelonIcon, label: "watermelon", points: 15, hazard: false },
+  { kind: "icing-gem", icon: icingGemIcon, label: "icing gem biscuit", points: 20, hazard: false },
+  { kind: "ondeh-ondeh", icon: ondehOndehIcon, label: "ondeh-ondeh", points: 25, hazard: false },
 ]);
 
 export const HAZARD_TYPES = Object.freeze([

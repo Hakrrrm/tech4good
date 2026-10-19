@@ -258,8 +258,8 @@ function startSession(mode) {
   updateTrackingStatus(0);
   elements.board.classList.toggle("keyboard-mode", mode === "keyboard");
   elements.inputHint.textContent = mode === "camera"
-    ? "Your hands control the circles. Keep your arms in view. Catch garden shapes and avoid bombs and germs."
-    : "Use the arrow keys or W A S D. Catch garden shapes and avoid bombs and germs.";
+    ? "Your hands control the circles. Keep your arms in view. Catch fruit and local treats; avoid bombs and germs."
+    : "Use the arrow keys or W A S D. Catch fruit and local treats; avoid bombs and germs.";
   elements.pause.textContent = "Pause";
   elements.pauseOverlay.hidden = true;
   updateStats();
@@ -287,7 +287,17 @@ function spawnObject(now) {
   };
   const node = document.createElement("div");
   node.className = `falling-object ${type.kind}`;
-  node.textContent = type.symbol;
+  if (type.icon) {
+    const icon = document.createElement("img");
+    icon.src = type.icon;
+    icon.alt = "";
+    icon.width = 56;
+    icon.height = 56;
+    icon.draggable = false;
+    node.append(icon);
+  } else {
+    node.textContent = type.symbol;
+  }
   node.dataset.id = object.id;
   node.setAttribute("role", "img");
   node.setAttribute("aria-label", type.label);
@@ -391,7 +401,7 @@ function resolveObject(object) {
   if (state.multiplier > 1) {
     elements.statusLive.textContent = `${object.type.label} caught for ${result.delta} points. ${state.multiplier} times streak multiplier.`;
   } else if (state.caught === 1 || state.caught % 5 === 0) {
-    elements.statusLive.textContent = `${state.caught} shapes caught.`;
+    elements.statusLive.textContent = `${state.caught} treats caught.`;
   }
 }
 
@@ -464,8 +474,8 @@ function endSession(reason = "ended") {
   elements.finalCaught.textContent = state.caught;
   elements.finalStreak.textContent = state.bestStreak;
   elements.resultMessage.textContent = reason === "misses"
-    ? `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}. Time for a gentle rest.`
-    : `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}.`;
+    ? `You caught ${state.caught} ${state.caught === 1 ? "treat" : "treats"}. Time for a gentle rest.`
+    : `You caught ${state.caught} ${state.caught === 1 ? "treat" : "treats"}.`;
   if (state.playerName !== "Guest") {
     elements.resultMessage.textContent = `${state.playerName}, ${elements.resultMessage.textContent.replace(/^You/, "you")}`;
   }

@@ -80,6 +80,30 @@ async function startCamera() {
 }
 
 describe("game session regression", () => {
+  it.each([
+    [0, "mandarin", "mandarin orange"],
+    [0.21, "watermelon", "watermelon"],
+    [0.42, "icing-gem", "icing gem biscuit"],
+    [0.62, "ondeh-ondeh", "ondeh-ondeh"],
+  ])("renders a local SVG collectible for roll %s", (roll, kind, label) => {
+    Math.random.mockReturnValue(roll);
+    click("#keyboardStart");
+    advance(1000);
+    const object = $(`.falling-object.${kind}`);
+    expect(object.getAttribute("aria-label")).toBe(label);
+    expect(object.querySelector("img").getAttribute("src")).toBeTruthy();
+    expect(object.querySelector("img").getAttribute("alt")).toBe("");
+    expect(object.querySelector("img").draggable).toBe(false);
+  });
+
+  it("keeps hazard symbols distinct from the new collectible artwork", () => {
+    Math.random.mockReturnValue(0.85);
+    click("#keyboardStart");
+    advance(1000);
+    expect($(".falling-object.bomb").textContent).toBe("💣");
+    expect($(".falling-object.bomb img")).toBeNull();
+  });
+
   it("cycles leaderboard durations in both directions without changing game settings or stored scores", () => {
     const entries = [20, 30, 60].map((durationSeconds) => ({
       id: `duration-${durationSeconds}`, name: `Player ${durationSeconds}`, score: durationSeconds,
