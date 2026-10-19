@@ -2,6 +2,7 @@ import "./styles.css";
 import { applyObjectScore, circlesOverlap, clamp, formatTime, getPaceConfig, randomObjectType } from "./gameLogic.js";
 import { HandTracker } from "./handTracker.js";
 import { mapCameraPoint } from "./handTrackingMath.js";
+import { createLeaderboardStore, normalizePlayerName } from "./leaderboard.js";
 
 const $ = (selector) => document.querySelector(selector);
 const elements = {
@@ -34,7 +35,18 @@ const elements = {
   resultMessage: $("#resultMessage"),
   playAgain: $("#playAgain"),
   statusLive: $("#statusLive"),
+  playerName: $("#playerName"),
+  leaderboard: $("#leaderboard"),
+  leaderboardEntries: $("#leaderboardEntries"),
+  leaderboardCategory: $("#leaderboardCategory"),
+  leaderboardEmpty: $("#leaderboardEmpty"),
+  leaderboardStorage: $("#leaderboardStorage"),
+  setupLeaderboardSlot: $("#setupLeaderboardSlot"),
+  resultsLeaderboardSlot: $("#resultsLeaderboardSlot"),
 };
+
+const leaderboardStore = createLeaderboardStore();
+const paceLabels = { gentle: "Gentle", steady: "Steady", lively: "Lively" };
 
 const state = {
   running: false,
@@ -60,6 +72,8 @@ const state = {
   stream: null,
   animationId: null,
   starting: false,
+  playerName: "Guest",
+  sessionId: null,
 };
 
 const boardSize = { width: 1, height: 1 };
@@ -116,6 +130,36 @@ function selectedValue(name) {
   return document.querySelector(`input[name="${name}"]:checked`).value;
 }
 
+function renderLeaderboard(pace, durationSeconds, board = leaderboardStore.list(pace, durationSeconds)) {
+  elements.leaderboardCategory.textContent = `${paceLabels[pace]} · ${durationSeconds === 60 ? "1 min" : `${durationSeconds} sec`}`;
+  elements.leaderboardEntries.replaceChildren(...board.entries.map((entry) => {
+    const row = document.createElement("li");
+    row.className = "leaderboard-entry";
+    row.classList.toggle("current-score", entry.id === state.sessionId);
+    const player = document.createElement("span");
+    player.className = "leaderboard-player";
+    const name = document.createElement("strong");
+    name.textContent = entry.name;
+    const mode = document.createElement("small");
+    mode.textContent = entry.mode === "camera" ? "Camera" : "Keyboard";
+    player.append(name, mode);
+    const score = document.createElement("strong");
+    score.className = "leaderboard-score";
+    score.textContent = String(entry.score);
+    score.setAttribute("aria-label", `${entry.score} points`);
+    row.append(player, score);
+    return row;
+  }));
+  elements.leaderboardEmpty.hidden = board.entries.length > 0;
+  elements.leaderboardStorage.textContent = board.persistent
+    ? "Names and scores stay in this browser on this device."
+    : "Browser storage is unavailable. Scores are temporary and may be lost on refresh.";
+}
+
+function renderSetupLeaderboard() {
+  renderLeaderboard(selectedValue("pace"), Number(selectedValue("duration")));
+}
+
 async function requestCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Camera access needs localhost or a secure HTTPS page.");
@@ -169,6 +213,8 @@ async function startWithCamera() {
 }
 
 function startSession(mode) {
+  state.playerName = normalizePlayerName(elements.playerName.value);
+  state.sessionId = crypto.randomUUID?.() ?? `${Date.now()}-${performance.now()}-${Math.random().toString(36).slice(2)}`;
   state.running = true;
   state.paused = false;
   state.mode = mode;
@@ -406,6 +452,15 @@ function endSession(reason = "ended") {
   elements.resultMessage.textContent = reason === "misses"
     ? `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}. Time for a gentle rest.`
     : `You caught ${state.caught} garden ${state.caught === 1 ? "shape" : "shapes"}.`;
+  if (state.playerName !== "Guest") {
+    elements.resultMessage.textContent = `${state.playerName}, ${elements.resultMessage.textContent.replace(/^You/, "you")}`;
+  }
+  const board = leaderboardStore.save({
+    id: state.sessionId, name: state.playerName, score: state.score,
+    pace: state.pace, durationSeconds: state.durationSeconds, mode: state.mode, endedAt: Date.now(),
+  });
+  elements.resultsLeaderboardSlot.append(elements.leaderboard);
+  renderLeaderboard(state.pace, state.durationSeconds, board);
   elements.statusLive.textContent = "Session complete.";
   elements.results.scrollIntoView({ block: "start" });
   elements.playAgain.focus({ preventScroll: true });
@@ -415,6 +470,8 @@ function resetToSetup() {
   elements.results.hidden = true;
   elements.setup.hidden = false;
   elements.cameraMessage.textContent = "";
+  elements.setupLeaderboardSlot.append(elements.leaderboard);
+  renderSetupLeaderboard();
   elements.setup.scrollIntoView({ block: "start" });
   elements.cameraStart.focus({ preventScroll: true });
 }
@@ -437,6 +494,16 @@ elements.keyboardStart.addEventListener("click", () => startSession("keyboard"))
 elements.pause.addEventListener("click", togglePause);
 elements.end.addEventListener("click", () => endSession("ended"));
 elements.playAgain.addEventListener("click", resetToSetup);
+document.querySelectorAll('input[name="pace"], input[name="duration"]').forEach((input) => {
+  input.addEventListener("change", renderSetupLeaderboard);
+});
+window.addEventListener("storage", () => {
+  if (!state.running) {
+    if (elements.results.hidden) renderSetupLeaderboard();
+    else renderLeaderboard(state.pace, state.durationSeconds);
+  }
+});
+renderSetupLeaderboard();
 window.addEventListener("keydown", handleKeyDown);
 window.addEventListener("keyup", (event) => state.keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => state.keys.clear());

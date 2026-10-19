@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { LEADERBOARD_KEY } from "../src/leaderboard.js";
 
 const mocks = vi.hoisted(() => ({ trackers: [] }));
 vi.mock("../src/handTracker.js", () => ({
@@ -32,6 +33,7 @@ const click = (selector) => $(selector).click();
 
 beforeEach(async () => {
   vi.resetModules();
+  localStorage.clear();
   mocks.trackers.length = 0;
   now = 1000;
   callbacks = new Map();
@@ -78,6 +80,86 @@ async function startCamera() {
 }
 
 describe("game session regression", () => {
+  it("saves the entered name and final score once, then restores them after an app reload", async () => {
+    $("#playerName").value = "  Alice   Tan  ";
+    const tracker = await startCamera();
+    tracker.hands = [{ x: 0.5, y: 0.04, interactive: true }];
+    advance(1000);
+    click("#endButton");
+    click("#endButton");
+    const rows = JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: "Alice Tan", score: 20, mode: "camera", pace: "gentle", durationSeconds: 30 });
+    expect($("#resultsLeaderboardSlot #leaderboard")).not.toBeNull();
+    expect($(".leaderboard-entry.current-score").textContent).toContain("Alice Tan");
+    events.forEach(([type, callback]) => window.removeEventListener(type, callback));
+    events = [];
+    vi.resetModules();
+    const html = readFileSync("index.html", "utf8");
+    document.body.innerHTML = html.match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script[\s\S]*?<\/script>/g, "");
+    await import("../src/main.js");
+    expect($("#setupLeaderboardSlot .leaderboard-entry").textContent).toContain("Alice Tan");
+    expect($(".leaderboard-score").textContent).toBe("20");
+  });
+
+  it("allows unnamed keyboard play, keeps categories separate, and moves the board back on replay", () => {
+    click("#keyboardStart");
+    click("#endButton");
+    expect($(".leaderboard-entry").textContent).toContain("Guest");
+    expect($(".leaderboard-entry").textContent).toContain("Keyboard");
+    click("#playAgain");
+    expect($("#setupLeaderboardSlot #leaderboard")).not.toBeNull();
+    const duration = $('input[name="duration"][value="20"]');
+    duration.checked = true;
+    duration.dispatchEvent(new Event("change", { bubbles: true }));
+    expect($("#leaderboardCategory").textContent).toBe("Gentle · 20 sec");
+    expect($("#leaderboardEmpty").hidden).toBe(false);
+    const defaultDuration = $('input[name="duration"][value="30"]');
+    defaultDuration.checked = true;
+    defaultDuration.dispatchEvent(new Event("change", { bubbles: true }));
+    expect($("#leaderboardEmpty").hidden).toBe(true);
+  });
+
+  it("keeps keyboard play working when randomUUID is unavailable on an insecure origin", () => {
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(undefined);
+    click("#keyboardStart");
+    click("#endButton");
+    expect(JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries[0].id).toBeTruthy();
+  });
+
+  it("uses the name captured at session start, not later edits", () => {
+    $("#playerName").value = "Alice";
+    click("#keyboardStart");
+    $("#playerName").value = "Bob";
+    click("#endButton");
+    expect($(".leaderboard-player strong").textContent).toBe("Alice");
+  });
+
+  it("renders names as text rather than executable markup", () => {
+    $("#playerName").value = "<img src=x onerror=x>";
+    click("#keyboardStart");
+    click("#endButton");
+    expect($("#leaderboardEntries img")).toBeNull();
+    expect($(".leaderboard-player strong").textContent).toBe("<img src=x onerror=x>");
+  });
+
+  it("still finishes a session and warns when browser storage is blocked", () => {
+    vi.spyOn(window, "localStorage", "get").mockImplementation(() => { throw new Error("blocked"); });
+    click("#keyboardStart");
+    click("#endButton");
+    expect($("#resultsPanel").hidden).toBe(false);
+    expect($("#leaderboardStorage").textContent).toContain("temporary");
+    expect($(".leaderboard-entry").textContent).toContain("Guest");
+  });
+
+  it("refreshes the visible board when another tab changes stored scores", () => {
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify({ version: 1, entries: [{
+      id: "other-tab", name: "Bob", score: 150, pace: "gentle", durationSeconds: 30, mode: "keyboard", endedAt: 1000,
+    }] }));
+    window.dispatchEvent(new StorageEvent("storage", { key: LEADERBOARD_KEY }));
+    expect($(".leaderboard-entry").textContent).toContain("Bob");
+  });
+
   it.each([20, 30, 60])("ends a %s-second session at its selected duration", (duration) => {
     $(`input[name="duration"][value="${duration}"]`).checked = true;
     click("#keyboardStart");
@@ -86,6 +168,7 @@ describe("game session regression", () => {
     expect($("#playPanel").hidden).toBe(false);
     advance(1);
     expect($("#resultsPanel").hidden).toBe(false);
+    expect(JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries[0].durationSeconds).toBe(duration);
   });
 
   it("excludes paused time and retains keyboard controls", () => {
@@ -147,6 +230,7 @@ describe("game session regression", () => {
     for (let frame = 0; frame < 590 && $("#resultsPanel").hidden; frame++) advance(50);
     expect($("#resultsPanel").hidden).toBe(false);
     expect($("#missedValue").textContent).toBe("6");
+    expect(JSON.parse(localStorage.getItem(LEADERBOARD_KEY)).entries).toHaveLength(1);
   });
 
   it("cleans up a camera stream when model initialization fails", async () => {
@@ -157,6 +241,7 @@ describe("game session regression", () => {
     expect($("#cameraMessage").textContent).toContain("Model load failed");
     expect($("#setupPanel").hidden).toBe(false);
     expect($("#keyboardStart").disabled).toBe(false);
+    expect(localStorage.getItem(LEADERBOARD_KEY)).toBeNull();
   });
 
   it("cleans up tracks when video playback fails", async () => {

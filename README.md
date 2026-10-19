@@ -30,6 +30,12 @@ Open `http://localhost:5173`, select a pace, and allow camera access. Camera acc
 - One or both hands can be used simultaneously. Keep your shoulders, arms and hands in camera view; each wrist/hand gets its own cursor.
 - It can be played seated or standing. The player should stop if movement is uncomfortable.
 
+## Device-local leaderboard
+
+Enter an optional name before starting a camera or keyboard session, or leave it blank to play as Guest. Each finished session (including End session or reaching the missed-shape limit) updates the top five for its selected pace and session length. Earlier sessions win score ties; camera/keyboard input is labelled on each row. The leaderboard appears before play and on the results screen, with the current session highlighted if it makes the top five. Game scoring, streaks, timing and hazards are unchanged.
+
+Names and scores are saved only in this browser's `localStorage`, with no account, server database or internet connection needed. They survive refreshes and browser/device restarts in a regular persistent browser profile. Keep the same browser profile and address, including the port: `localhost:4173`, `127.0.0.1:4173` and `localhost:5173` have separate storage. Private/incognito sessions, clearing site data, or deleting the browser profile can erase the leaderboard. Do not use incognito mode for the Pi kiosk. If storage is blocked or full, the game remains playable and shows a warning that scores are temporary. The name field itself is not restored after refresh, so the next kiosk player can enter their own name.
+
 ## Raspberry Pi 5 kiosk deployment
 
 Install Raspberry Pi OS 64-bit with Desktop, Node.js 22, and Chromium. Attach a UVC-compatible 1080p webcam, then:

@@ -24,37 +24,60 @@
 
       <main id="game" class="game-shell">
         <section id="setupPanel" class="setup-panel" aria-labelledby="welcomeTitle">
-          <div class="welcome-copy">
-            <p class="eyebrow">A gentle movement break</p>
-            <h1 id="welcomeTitle">Move, reach, and catch.</h1>
-            <p class="intro">Collect the garden shapes, build a scoring streak, and steer clear of bombs and germs. Play seated or standing, and move only as far as feels comfortable.</p>
+          <div class="setup-overview">
+            <div class="welcome-copy">
+              <p class="eyebrow">A gentle movement break</p>
+              <h1 id="welcomeTitle">Move, reach, and catch.</h1>
+              <p class="intro">Collect the garden shapes, build a scoring streak, and steer clear of bombs and germs. Play seated or standing, and move only as far as feels comfortable.</p>
+            </div>
+
+            <div id="setupLeaderboardSlot">
+              <section id="leaderboard" class="leaderboard" aria-labelledby="leaderboardTitle">
+                <div class="leaderboard-heading">
+                  <h2 id="leaderboardTitle">Local leaderboard</h2>
+                  <span>Top 5</span>
+                </div>
+                <p id="leaderboardCategory" class="leaderboard-category"></p>
+                <ol id="leaderboardEntries" class="leaderboard-entries" aria-label="Highest scores"></ol>
+                <p id="leaderboardEmpty" class="leaderboard-empty">No scores yet. Enjoy the first session!</p>
+                <p id="leaderboardStorage" class="leaderboard-storage" role="status">Names and scores stay in this browser on this device.</p>
+              </section>
+            </div>
           </div>
 
-          <fieldset class="choice-group">
-            <legend>Choose a pace</legend>
-            <div class="segmented pace-options">
-              <label><input type="radio" name="pace" value="gentle" checked /><span><strong>Gentle</strong><small>More time to reach</small></span></label>
-              <label><input type="radio" name="pace" value="steady" /><span><strong>Steady</strong><small>A little quicker</small></span></label>
-              <label><input type="radio" name="pace" value="lively" /><span><strong>Lively</strong><small>More on screen</small></span></label>
+          <div class="setup-options">
+            <div class="player-name-field">
+              <label for="playerName">Your name <span>(optional)</span></label>
+              <input id="playerName" name="playerName" type="text" maxlength="24" autocomplete="off" placeholder="e.g. Alice" aria-describedby="playerNameHint" />
+              <small id="playerNameHint">Leave blank to play as Guest.</small>
             </div>
-          </fieldset>
 
-          <fieldset class="choice-group">
-            <legend>Session length</legend>
-            <div class="segmented duration-options">
-              <label><input type="radio" name="duration" value="20" /><span>20 sec</span></label>
-              <label><input type="radio" name="duration" value="30" checked /><span>30 sec</span></label>
-              <label><input type="radio" name="duration" value="60" /><span>1 min</span></label>
+            <fieldset class="choice-group">
+              <legend>Choose a pace</legend>
+              <div class="segmented pace-options">
+                <label><input type="radio" name="pace" value="gentle" checked /><span><strong>Gentle</strong><small>More time to reach</small></span></label>
+                <label><input type="radio" name="pace" value="steady" /><span><strong>Steady</strong><small>A little quicker</small></span></label>
+                <label><input type="radio" name="pace" value="lively" /><span><strong>Lively</strong><small>More on screen</small></span></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="choice-group">
+              <legend>Session length</legend>
+              <div class="segmented duration-options">
+                <label><input type="radio" name="duration" value="20" /><span>20 sec</span></label>
+                <label><input type="radio" name="duration" value="30" checked /><span>30 sec</span></label>
+                <label><input type="radio" name="duration" value="60" /><span>1 min</span></label>
+              </div>
+            </fieldset>
+
+            <div class="start-actions">
+              <button id="cameraStart" class="button button-primary" type="button">
+                <span aria-hidden="true">◉</span> Use camera &amp; start
+              </button>
+              <button id="keyboardStart" class="button button-secondary" type="button">Play with keyboard</button>
             </div>
-          </fieldset>
-
-          <div class="start-actions">
-            <button id="cameraStart" class="button button-primary" type="button">
-              <span aria-hidden="true">◉</span> Use camera &amp; start
-            </button>
-            <button id="keyboardStart" class="button button-secondary" type="button">Play with keyboard</button>
+            <p id="cameraMessage" class="camera-message" role="status"></p>
           </div>
-          <p id="cameraMessage" class="camera-message" role="status"></p>
           <p class="safety-note"><strong>Comfort first.</strong> Stop if movement feels uncomfortable. A caregiver can help with the first camera permission.</p>
         </section>
 
@@ -92,16 +115,19 @@
         </section>
 
         <section id="resultsPanel" class="results-panel" aria-labelledby="resultsTitle" hidden>
-          <div class="result-icon" aria-hidden="true">★</div>
-          <p class="eyebrow">Session complete</p>
-          <h2 id="resultsTitle">Lovely movement!</h2>
-          <p id="resultMessage" class="result-message">You caught 0 garden shapes.</p>
-          <div class="result-stats">
-            <div><span>Score</span><strong id="finalScore">0</strong></div>
-            <div><span>Caught</span><strong id="finalCaught">0</strong></div>
-            <div><span>Best streak</span><strong id="finalStreak">0</strong></div>
+          <div class="result-summary">
+            <div class="result-icon" aria-hidden="true">★</div>
+            <p class="eyebrow">Session complete</p>
+            <h2 id="resultsTitle">Lovely movement!</h2>
+            <p id="resultMessage" class="result-message">You caught 0 garden shapes.</p>
+            <div class="result-stats">
+              <div><span>Score</span><strong id="finalScore">0</strong></div>
+              <div><span>Caught</span><strong id="finalCaught">0</strong></div>
+              <div><span>Best streak</span><strong id="finalStreak">0</strong></div>
+            </div>
+            <button id="playAgain" class="button button-primary" type="button">Play another session</button>
           </div>
-          <button id="playAgain" class="button button-primary" type="button">Play another session</button>
+          <div id="resultsLeaderboardSlot"></div>
         </section>
       </main>
 
