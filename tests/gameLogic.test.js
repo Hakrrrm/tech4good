@@ -45,6 +45,12 @@ describe("game helpers", () => {
     expect(randomObjectType(() => 0.99).kind).toBe("virus");
   });
 
+  it("makes Lively a little faster without changing spawn rates, object counts, or the other paces", () => {
+    expect(getPaceConfig("gentle")).toEqual({ fallSpeed: 42, spawnInterval: 1800, maxObjects: 3, missLimit: 10 });
+    expect(getPaceConfig("steady")).toEqual({ fallSpeed: 58, spawnInterval: 1350, maxObjects: 4, missLimit: 8 });
+    expect(getPaceConfig("lively")).toEqual({ fallSpeed: 88, spawnInterval: 1000, maxObjects: 5, missLimit: 6 });
+  });
+
   it("uses local fruit and Singapore treat icons without changing point tiers or hazard deductions", () => {
     expect(OBJECT_TYPES.map((type) => type.kind)).toEqual(["mandarin", "watermelon", "icing-gem", "ondeh-ondeh"]);
     expect(OBJECT_TYPES.map((type) => type.points)).toEqual([10, 15, 20, 25]);

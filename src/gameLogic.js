@@ -6,7 +6,7 @@ import ondehOndehIcon from "./assets/ondeh-ondeh.svg";
 export const PACE_CONFIG = Object.freeze({
   gentle: { fallSpeed: 42, spawnInterval: 1800, maxObjects: 3, missLimit: 10 },
   steady: { fallSpeed: 58, spawnInterval: 1350, maxObjects: 4, missLimit: 8 },
-  lively: { fallSpeed: 76, spawnInterval: 1000, maxObjects: 5, missLimit: 6 },
+  lively: { fallSpeed: 88, spawnInterval: 1000, maxObjects: 5, missLimit: 6 },
 });
 
 export const OBJECT_TYPES = Object.freeze([
